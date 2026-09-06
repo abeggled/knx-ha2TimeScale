@@ -1,0 +1,9 @@
+# Never commit: contains the full building topology
+*.knxproj
+# Secrets
+.env
+*.pwd
+# Local
+.venv/
+__pycache__/
+*.log

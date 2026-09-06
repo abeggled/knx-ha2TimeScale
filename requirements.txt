@@ -1,0 +1,4 @@
+psycopg[binary]>=3.2
+xknxproject>=3.8
+xknx>=3.0
+aiohttp>=3.9
