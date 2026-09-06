@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import enum
 import logging
 
 from xknx import XKNX
@@ -50,6 +51,10 @@ def transcoder_for(dpt: str | None):
 
 
 def format_value(value) -> str:
+    if isinstance(value, enum.Enum):
+        # DPT 1.x subtypes decode to enums (State.ACTIVE, ...). The archive
+        # stores plain booleans, so keep that.
+        value = value.value
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, float):
@@ -64,6 +69,39 @@ def raw_hex(payload) -> str:
         return "0x" + payload.value.hex() if isinstance(payload.value, bytes) \
             else "0x" + bytes(payload.value).hex()
     return str(payload)
+
+
+def decode(dpt: str | None, payload) -> tuple[str, bool]:
+    """Return (value, decoded). Two lenient fallbacks reproduce what the
+    previous collector accepted, without weakening the primary path:
+
+    * DPT 1.x sent as a full byte instead of a 6-bit payload — some devices
+      do this; the least significant bit carries the state.
+    * Subtypes with a range check rejecting a legitimate value, e.g. a
+      pressure *tendency* on DPT 9.006, which is signed in practice. The
+      main type (DPT 9) decodes it without the range restriction.
+    """
+    transcoder = transcoder_for(dpt)
+    if transcoder is not None:
+        try:
+            return format_value(transcoder.from_knx(payload)), True
+        except Exception:  # noqa: BLE001 — fall through to the lenient paths
+            pass
+
+    main = (dpt or "").split(".")[0]
+
+    if main == "1" and isinstance(payload, DPTArray) and len(payload.value) == 1:
+        return ("true" if payload.value[0] & 1 else "false"), True
+
+    if main:
+        base = transcoder_for(main)
+        if base is not None and base is not transcoder:
+            try:
+                return format_value(base.from_knx(payload)), True
+            except Exception:  # noqa: BLE001
+                pass
+
+    return raw_hex(payload), False
 
 
 class KNXSource:
@@ -108,21 +146,12 @@ class KNXSource:
             return
 
         dpt = self.registry.dpt_for(destination)
-        transcoder = transcoder_for(dpt)
-        unit = self.registry.unit_for(dpt, None)
-        if transcoder is not None:
-            try:
-                value = format_value(transcoder.from_knx(payload.value))
-                unit = self.registry.unit_for(
-                    dpt, getattr(transcoder, "unit", None)
-                )
-            except Exception as exc:  # noqa: BLE001 — wrong DPT, keep the raw value
-                log.debug("decode failed for %s (%s): %s", destination, dpt, exc)
-                value = raw_hex(payload.value)
-                self.undecoded += 1
-        else:
-            value = raw_hex(payload.value)
+        value, decoded = decode(dpt, payload.value)
+        if not decoded:
             self.undecoded += 1
+            log.debug("no decode for %s (dpt %s), storing raw", destination, dpt)
+        transcoder = transcoder_for(dpt)
+        unit = self.registry.unit_for(dpt, getattr(transcoder, "unit", None))
 
         self.writer.submit((
             dt.datetime.now(dt.timezone.utc),
