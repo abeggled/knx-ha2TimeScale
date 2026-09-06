@@ -1,0 +1,28 @@
+[Unit]
+Description=knx-ha2TimeScale collector (KNX + Home Assistant -> TimescaleDB)
+Documentation=https://github.com/abeggled/knx-ha2TimeScale
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=collector
+WorkingDirectory=/opt/knx-ha2timescale
+EnvironmentFile=/etc/knx-ha2timescale.env
+ExecStart=/opt/knx-ha2timescale/.venv/bin/python -u service.py
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=10
+
+# Hardening — the service needs the network and nothing else.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target
