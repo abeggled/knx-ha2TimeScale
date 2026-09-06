@@ -10,6 +10,7 @@ import asyncio
 import datetime as dt
 import enum
 import logging
+import struct
 
 from xknx import XKNX
 from xknx.dpt import DPTArray, DPTBase, DPTBinary
@@ -74,6 +75,21 @@ def raw_hex(payload) -> str:
     return str(payload)
 
 
+def decode_4byte_float(payload) -> float | None:
+    """xknx rounds DPT 14.x to seven significant digits to match the ETS
+    group monitor. At meter-reading magnitudes that drops the third decimal,
+    which is genuinely present in the float32 — and which the previous
+    collector wrote for three and a half years. Decode it ourselves to keep
+    the series continuous.
+    """
+    if not isinstance(payload, DPTArray) or len(payload.value) != 4:
+        return None
+    try:
+        return struct.unpack(">f", bytes(payload.value))[0]
+    except struct.error:
+        return None
+
+
 def decode(dpt: str | None, payload) -> tuple[str, bool]:
     """Return (value, decoded). Two lenient fallbacks reproduce what the
     previous collector accepted, without weakening the primary path:
@@ -85,6 +101,12 @@ def decode(dpt: str | None, payload) -> tuple[str, bool]:
       main type (DPT 9) decodes it without the range restriction.
     """
     transcoder = transcoder_for(dpt)
+
+    if (dpt or "").split(".")[0] == "14":
+        raw = decode_4byte_float(payload)
+        if raw is not None:
+            return format_value(raw), True
+
     if transcoder is not None:
         try:
             return format_value(transcoder.from_knx(payload)), True
