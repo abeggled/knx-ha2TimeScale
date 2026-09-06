@@ -6,6 +6,7 @@ once the DPT is known — nothing is silently discarded.
 """
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
 import logging
 
@@ -91,7 +92,9 @@ class KNXSource:
             auto_reconnect=True,
         )
 
-    async def _on_telegram(self, telegram: Telegram) -> None:
+    def _on_telegram(self, telegram: Telegram) -> None:
+        """Called synchronously by xknx's TelegramQueue — must not be a
+        coroutine (xknx invokes it without awaiting). submit() never blocks."""
         payload = telegram.payload
         if not isinstance(payload, GroupValueWrite) and not (
             self.include_responses and isinstance(payload, GroupValueResponse)
@@ -106,11 +109,13 @@ class KNXSource:
 
         dpt = self.registry.dpt_for(destination)
         transcoder = transcoder_for(dpt)
-        unit = "unknown"
+        unit = self.registry.unit_for(dpt, None)
         if transcoder is not None:
             try:
                 value = format_value(transcoder.from_knx(payload.value))
-                unit = getattr(transcoder, "unit", None) or "unknown"
+                unit = self.registry.unit_for(
+                    dpt, getattr(transcoder, "unit", None)
+                )
             except Exception as exc:  # noqa: BLE001 — wrong DPT, keep the raw value
                 log.debug("decode failed for %s (%s): %s", destination, dpt, exc)
                 value = raw_hex(payload.value)
@@ -136,6 +141,6 @@ class KNXSource:
         log.info("KNX source connected (%s)",
                  self.registry.settings.get("knx.connection"))
         try:
-            await self.xknx.stop_event.wait()
+            await asyncio.Event().wait()      # run until cancelled
         finally:
             await self.xknx.stop()

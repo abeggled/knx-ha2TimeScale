@@ -40,6 +40,17 @@ async def status_loop(knx, ha, knx_writer, ha_writer) -> None:
         log.info(" | ".join(parts))
 
 
+def _watch(task: asyncio.Task) -> asyncio.Task:
+    """Surface exceptions: an unobserved task dies silently otherwise."""
+    def done(t: asyncio.Task) -> None:
+        if t.cancelled():
+            return
+        if exc := t.exception():
+            log.error("task %s died: %r", t.get_name(), exc, exc_info=exc)
+    task.add_done_callback(done)
+    return task
+
+
 async def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", choices=["knx", "ha"], help="run a single source")
@@ -60,7 +71,7 @@ async def main() -> None:
     max_rows = int(registry.settings.get("batch.max_rows", "500"))
     max_secs = float(registry.settings.get("batch.max_seconds", "2"))
 
-    tasks = [asyncio.create_task(registry.reload_loop(), name="registry")]
+    tasks = [_watch(asyncio.create_task(registry.reload_loop(), name="registry"))]
     knx = ha = None
     knx_writer = ha_writer = None
 
@@ -68,18 +79,18 @@ async def main() -> None:
         knx_writer = BatchWriter(db.KNX_DSN, f"knx_measurements{suffix}",
                                  knx_source.COLUMNS, max_rows, max_secs)
         knx = knx_source.KNXSource(registry, knx_writer)
-        tasks += [asyncio.create_task(knx_writer.run(), name="knx-writer"),
-                  asyncio.create_task(knx.run(), name="knx-source")]
+        tasks += [_watch(asyncio.create_task(knx_writer.run(), name="knx-writer")),
+                  _watch(asyncio.create_task(knx.run(), name="knx-source"))]
 
     if args.only != "knx":
         ha_writer = BatchWriter(db.HA_DSN, f"ha_measurements{suffix}",
                                 ha_source.COLUMNS, max_rows, max_secs)
         ha = ha_source.HASource(registry, ha_writer)
-        tasks += [asyncio.create_task(ha_writer.run(), name="ha-writer"),
-                  asyncio.create_task(ha.run(), name="ha-source")]
+        tasks += [_watch(asyncio.create_task(ha_writer.run(), name="ha-writer")),
+                  _watch(asyncio.create_task(ha.run(), name="ha-source"))]
 
-    tasks.append(asyncio.create_task(
-        status_loop(knx, ha, knx_writer, ha_writer), name="status"))
+    tasks.append(_watch(asyncio.create_task(
+        status_loop(knx, ha, knx_writer, ha_writer), name="status")))
 
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
@@ -87,7 +98,7 @@ async def main() -> None:
         loop.add_signal_handler(sig, stop.set)
     # SIGHUP reloads registry immediately (after an ETS import, for example).
     loop.add_signal_handler(
-        signal.SIGHUP, lambda: asyncio.create_task(registry.load())
+        signal.SIGHUP, lambda: _watch(asyncio.create_task(registry.load()))
     )
 
     log.info("collector started%s", " (dry run)" if args.dry_run else "")

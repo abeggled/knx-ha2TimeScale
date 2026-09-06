@@ -30,6 +30,7 @@ class Registry:
         self.settings: dict[str, str] = {}
         self.ga: dict[str, GA] = {}
         self.ha_entities: dict[str, bool] = {}          # entity_id -> archive
+        self.units: dict[str, str] = {}                 # dpt -> stored unit
         self.knx_patterns: list[str] = []
         self.ha_patterns: list[str] = []
         self._new_ga: set[str] = set()
@@ -46,6 +47,9 @@ class Registry:
             self.ga = {
                 a: GA(name=n, dpt=d, archive=ar) for a, n, d, ar in await cur.fetchall()
             }
+
+            await cur.execute("SELECT dpt, unit FROM knx_dpt_unit")
+            self.units = {d: u for d, u in await cur.fetchall()}
 
             await cur.execute(
                 "SELECT kind, pattern FROM archive_exclude_pattern"
@@ -101,6 +105,12 @@ class Registry:
             self._new_entities.add(entity_id)
             return True
         return known
+
+    def unit_for(self, dpt: str | None, fallback: str | None) -> str:
+        """Stored convention wins over the transcoder symbol."""
+        if dpt and dpt in self.units:
+            return self.units[dpt]
+        return fallback or "unknown"
 
     def dpt_for(self, address: str) -> str | None:
         entry = self.ga.get(address)
