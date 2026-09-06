@@ -58,7 +58,10 @@ def format_value(value) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, float):
-        return f"{round(value, 3):g}"
+        # Three decimals, trailing zeros trimmed — matches the archive.
+        # (%g would cap at six significant digits and truncate large
+        # meter readings: 21997.842 -> 21997.8)
+        return f"{value:.3f}".rstrip("0").rstrip(".")
     return str(value)
 
 
