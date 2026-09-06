@@ -63,11 +63,14 @@ def main() -> None:
         existing = {r[0]: {"name": r[1], "dpt": r[2], "origin": r[3]}
                     for r in cur.fetchall()}
 
-        added, changed, unchanged = [], [], 0
+        added, changed, unchanged, pinned = [], [], 0, []
         for addr, new in project.items():
             old = existing.get(addr)
             if old is None:
                 added.append((addr, new))
+            elif old["origin"] == "manual":
+                if old["name"] != new["name"] or old["dpt"] != new["dpt"]:
+                    pinned.append((addr, old, new))
             elif old["name"] != new["name"] or old["dpt"] != new["dpt"]:
                 changed.append((addr, old, new))
             else:
@@ -77,8 +80,15 @@ def main() -> None:
         print()
         print(f"new:       {len(added)}")
         print(f"changed:   {len(changed)}")
+        print(f"pinned:    {len(pinned)}  (origin=manual, left untouched)")
         print(f"unchanged: {unchanged}")
         print(f"vanished:  {len(vanished)}  (kept, not deleted)")
+
+        if pinned:
+            print("\n--- pinned, ETS ignored ---")
+            for addr, old, new in pinned:
+                print(f"  {addr:<10} keeping dpt={old['dpt']} name={old['name']!r}"
+                      f"  (ETS says dpt={new['dpt']})")
 
         if added:
             print("\n--- new ---")
@@ -126,6 +136,7 @@ def main() -> None:
                 description = excluded.description,
                 origin      = 'ets',
                 updated_at  = now()
+            WHERE knx_ga.origin <> 'manual'
             """,
             [(a, g["name"], g["dpt"], g["description"]) for a, g in project.items()],
         )
