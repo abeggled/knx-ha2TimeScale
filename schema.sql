@@ -62,9 +62,9 @@ CREATE TABLE IF NOT EXISTS settings (
 
 INSERT INTO settings (key, value, note) VALUES
     ('knx.connection',      'tunnel',        'tunnel | routing'),
-    ('knx.gateway_host',    '10.38.114.44',  'KNXnet/IP gateway (tunnel mode)'),
-    ('knx.gateway_port',    '3674',          NULL),
-    ('knx.individual_address', '1.1.202',    'own address on the bus'),
+    ('knx.gateway_host',    '',              'KNXnet/IP gateway IP (tunnel mode)'),
+    ('knx.gateway_port',    '3671',          NULL),
+    ('knx.individual_address', '',           'own address on the bus, e.g. 1.1.250'),
     ('ha.websocket_url',    '',              'ws://host:8123/api/websocket'),
     ('ha.token_env',        'HA_TOKEN',      'name of the env var holding the token'),
     ('batch.max_rows',      '500',           'flush after N rows'),

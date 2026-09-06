@@ -5,12 +5,8 @@ import os
 
 import psycopg
 
-KNX_DSN = os.environ.get(
-    "KNX_DSN", "host=iqsrv36.a38.ch dbname=knx_data user=postgres"
-)
-HA_DSN = os.environ.get(
-    "HA_DSN", "host=iqsrv36.a38.ch dbname=ha_data user=postgres"
-)
+KNX_DSN = os.environ.get("KNX_DSN", "dbname=knx_data")
+HA_DSN = os.environ.get("HA_DSN", "dbname=ha_data")
 
 
 def knx_conn(**kw) -> psycopg.Connection:
