@@ -1,0 +1,68 @@
+{% extends "base.html" %}{% set nav='exclusions' %}
+{% block body %}
+
+<h2>Ausschlüsse</h2>
+<p class="note">Ein Muster nimmt <b>ganze Gruppen</b> von der Archivierung aus. Einzelne Adressen oder Entities schaltest du direkt in den Listen <a href="/knx" style="color:var(--acc)">KNX</a> und <a href="/ha" style="color:var(--acc)">Home Assistant</a> um — dafür braucht es hier nichts. Muster gewinnen gegen den Einzelschalter: was ein Muster trifft, wird nicht archiviert, auch wenn die Adresse auf „Archiv: ja“ steht.<br>
+Platzhalter ist das Prozentzeichen: <span class="mono">%</span> steht für beliebig viele Zeichen, an jeder Stelle.</p>
+
+<h2>KNX-Gruppenadressen</h2>
+<p class="note">Verglichen wird die Adresse in der Schreibweise <span class="mono">Haupt/Mittel/Unter</span>, also etwa <span class="mono">20/1/76</span>.</p>
+<table>
+  <tr><th style="width:220px">Muster</th><th>trifft</th><th>Notiz</th><th style="width:100px"></th></tr>
+  {% for id, pattern, note, hits in knx %}
+  <tr>
+    <td class="mono">{{ pattern }}</td>
+    <td>{% if hits %}<a href="/knx?q={{ pattern|replace('%','')|urlencode }}" style="color:var(--acc);text-decoration:none">{{ hits }} Adressen</a>{% else %}<span class="pill warn">trifft nichts</span>{% endif %}</td>
+    <td class="dim">{{ note or '' }}</td>
+    <td><form method="post" action="/exclusions/delete" class="inline">
+      <input type="hidden" name="id" value="{{ id }}"><button class="link">entfernen</button></form></td>
+  </tr>
+  {% else %}
+  <tr><td colspan="4" class="dim">keine Muster</td></tr>
+  {% endfor %}
+</table>
+<form class="bar" method="post" action="/exclusions/add" style="margin-top:12px">
+  <input type="hidden" name="kind" value="knx">
+  <input name="pattern" placeholder="0/0/%" class="mono" style="min-width:220px" required>
+  <input name="note" placeholder="Notiz (optional)" style="min-width:240px">
+  <button class="act">Hinzufügen</button>
+</form>
+<table style="margin-top:10px">
+  <tr><th style="width:220px">Beispiel</th><th>Wirkung</th></tr>
+  {% for pattern, desc in knx_examples %}
+  <tr><td class="mono">{{ pattern }}</td><td class="dim">{{ desc }}</td></tr>
+  {% endfor %}
+</table>
+
+<h2>Home-Assistant-Entities</h2>
+<p class="note">Verglichen wird die vollständige <span class="mono">entity_id</span>, also etwa <span class="mono">sensor.wr01a38_home_power</span>.</p>
+<table>
+  <tr><th style="width:280px">Muster</th><th>trifft</th><th>Notiz</th><th style="width:100px"></th></tr>
+  {% for id, pattern, note, hits in ha %}
+  <tr>
+    <td class="mono">{{ pattern }}</td>
+    <td>{% if hits %}<a href="/ha?q={{ pattern|replace('%','')|urlencode }}" style="color:var(--acc);text-decoration:none">{{ hits }} Entities</a>{% else %}<span class="pill warn">trifft nichts</span>{% endif %}</td>
+    <td class="dim">{{ note or '' }}</td>
+    <td><form method="post" action="/exclusions/delete" class="inline">
+      <input type="hidden" name="id" value="{{ id }}"><button class="link">entfernen</button></form></td>
+  </tr>
+  {% else %}
+  <tr><td colspan="4" class="dim">keine Muster</td></tr>
+  {% endfor %}
+</table>
+<form class="bar" method="post" action="/exclusions/add" style="margin-top:12px">
+  <input type="hidden" name="kind" value="ha">
+  <input name="pattern" placeholder="automation.%" class="mono" style="min-width:280px" required>
+  <input name="note" placeholder="Notiz (optional)" style="min-width:240px">
+  <button class="act">Hinzufügen</button>
+</form>
+<table style="margin-top:10px">
+  <tr><th style="width:280px">Beispiel</th><th>Wirkung</th></tr>
+  {% for pattern, desc in ha_examples %}
+  <tr><td class="mono">{{ pattern }}</td><td class="dim">{{ desc }}</td></tr>
+  {% endfor %}
+</table>
+
+<p class="note">„Trifft nichts“ heisst: im Inventar steht derzeit kein passender Eintrag. Bei KNX ist das fast immer ein Tippfehler, weil alle Gruppenadressen aus ETS bekannt sind. Bei Home Assistant kann es auch bedeuten, dass die Entity seit dem letzten Neustart nicht gesendet hat — das Inventar füllt sich erst im Betrieb.</p>
+<p class="note">Ein neues Muster wirkt, sobald der Collector die Registry neu liest — spätestens nach zehn Minuten, sofort mit <span class="mono">systemctl reload knx-ha2timescale</span>. Bereits archivierte Werte bleiben erhalten.</p>
+{% endblock %}

@@ -386,31 +386,61 @@ def messages_clear(_: str = Depends(auth)):
     return RedirectResponse("/messages", status_code=303)
 
 
-# ── patterns ──────────────────────────────────────────────────────────────
-@app.get("/patterns", response_class=HTMLResponse)
-def patterns(request: Request, _: str = Depends(auth)):
+# ── exclusions ────────────────────────────────────────────────────────────
+# Patterns use SQL LIKE syntax, matched with fnmatch at runtime ('%' -> '*').
+KNX_EXAMPLES = [
+    ("0/0/%", "alle Zentralfunktionen der Hauptgruppe 0"),
+    ("20/1/%", "Strom Ein/Aus der ganzen Küche (E16)"),
+    ("%/6/%", "die Mittelgruppe Sensorik in allen Hauptgruppen"),
+    ("%/7/2%", "alle Adressen der Mittelgruppe 7, die mit 2 beginnen"),
+]
+HA_EXAMPLES = [
+    ("automation.%", "die ganze Domain automation"),
+    ("sensor.flightradar24_%", "alle Flightradar-Sensoren"),
+    ("%_uptime", "jede Entity, deren Name auf _uptime endet"),
+    ("sensor.awtrix%free_ram", "Platzhalter dürfen auch in der Mitte stehen"),
+]
+
+
+@app.get("/exclusions", response_class=HTMLResponse)
+def exclusions(request: Request, _: str = Depends(auth)):
     rows = query(db.KNX_DSN,
                  "SELECT id, kind, pattern, note FROM archive_exclude_pattern"
                  " ORDER BY kind, pattern")
-    return page(request, "patterns.html", rows=rows)
+    # How many entries each pattern actually hits — a pattern that matches
+    # nothing is almost always a typo, and you cannot see that from the text.
+    knx, ha = [], []
+    for pid, kind, pattern, note in rows:
+        if kind == "knx":
+            hits = query(db.KNX_DSN,
+                         "SELECT count(*) FROM knx_ga WHERE address LIKE %s",
+                         (pattern,))[0][0]
+            knx.append((pid, pattern, note, hits))
+        else:
+            hits = query(db.HA_DSN,
+                         "SELECT count(*) FROM ha_entity WHERE entity_id LIKE %s",
+                         (pattern,))[0][0]
+            ha.append((pid, pattern, note, hits))
+    return page(request, "exclusions.html", knx=knx, ha=ha,
+                knx_examples=KNX_EXAMPLES, ha_examples=HA_EXAMPLES)
 
 
-@app.post("/patterns/add")
-def pattern_add(kind: str = Form(...), pattern: str = Form(...),
-                note: str = Form(""), _: str = Depends(auth)):
+@app.post("/exclusions/add")
+def exclusion_add(kind: str = Form(...), pattern: str = Form(...),
+                  note: str = Form(""), _: str = Depends(auth)):
     if kind in ("knx", "ha") and pattern.strip():
         execute(db.KNX_DSN,
                 "INSERT INTO archive_exclude_pattern (kind, pattern, note)"
                 " VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
                 (kind, pattern.strip(), note or None))
-    return RedirectResponse("/patterns", status_code=303)
+    return RedirectResponse("/exclusions", status_code=303)
 
 
-@app.post("/patterns/delete")
-def pattern_delete(id: int = Form(...), _: str = Depends(auth)):
+@app.post("/exclusions/delete")
+def exclusion_delete(id: int = Form(...), _: str = Depends(auth)):
     execute(db.KNX_DSN, "DELETE FROM archive_exclude_pattern WHERE id = %s",
             (id,))
-    return RedirectResponse("/patterns", status_code=303)
+    return RedirectResponse("/exclusions", status_code=303)
 
 
 # ── settings ──────────────────────────────────────────────────────────────

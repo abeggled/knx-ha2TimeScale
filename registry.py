@@ -89,22 +89,23 @@ class Registry:
         return any(fnmatch.fnmatch(value, p.replace("%", "*")) for p in patterns)
 
     def knx_archive(self, address: str) -> bool:
-        if self._matches(address, self.knx_patterns):
-            return False
+        # Register first, decide second: an address excluded by a pattern is
+        # still part of the inventory, otherwise the pattern appears to match
+        # nothing and cannot be reviewed.
         entry = self.ga.get(address)
         if entry is None:
-            self._new_ga.add(address)      # unknown: archive, register later
-            return True
-        return entry.archive
+            self._new_ga.add(address)
+        if self._matches(address, self.knx_patterns):
+            return False
+        return True if entry is None else entry.archive
 
     def ha_archive(self, entity_id: str) -> bool:
-        if self._matches(entity_id, self.ha_patterns):
-            return False
         known = self.ha_entities.get(entity_id)
         if known is None:
             self._new_entities.add(entity_id)
-            return True
-        return known
+        if self._matches(entity_id, self.ha_patterns):
+            return False
+        return True if known is None else known
 
     def unit_for(self, dpt: str | None, fallback: str | None) -> str:
         """Stored convention wins over the transcoder symbol."""
