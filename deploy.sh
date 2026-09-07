@@ -21,6 +21,13 @@ tar czf - \
     ./*.py ./*.sql ./*.sh ./*.service requirements.txt templates \
   | $SSH "$TARGET" "tar xzf - -C '$REMOTE' && chmod +x '$REMOTE'/*.sh"
 
+# tar only adds. Remove remote files that no longer exist locally, otherwise a
+# deleted template keeps being installed.
+KEEP=$(cd templates && ls *.html | tr '\n' ' ')
+$SSH "$TARGET" "cd '$REMOTE/templates' && for f in *.html; do
+    case \" $KEEP \" in *\" \$f \"*) ;; *) rm -f \"\$f\"; echo \"entfernt: \$f\";; esac
+done"
+
 echo "synced to $TARGET:$REMOTE"
 echo
 echo "On the target, as root:"

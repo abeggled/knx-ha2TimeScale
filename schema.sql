@@ -72,8 +72,6 @@ INSERT INTO settings (key, value, note) VALUES
     ('knx.gateway_port',    '3671',          NULL),
     ('knx.individual_address', '',           'own address on the bus, e.g. 1.1.250'),
     ('knx.keyring_path',    '',              'path to the .knxkeys export from ETS'),
-    ('knx.keyring_password_env', 'KNX_KEYRING_PASSWORD',
-        'name of the env var holding the keyring password'),
     ('knx.secure_user_id',  '',              'tunnel user from the keyring; empty = automatic'),
     ('ha.websocket_url',    '',              'ws://host:8123/api/websocket'),
     ('ha.token_env',        'HA_TOKEN',      'name of the env var holding the token'),

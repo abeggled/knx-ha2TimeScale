@@ -1,0 +1,99 @@
+{% extends "base.html" %}{% set nav='connection' %}
+{% block body %}
+<h2>KNX-Verbindung</h2>
+
+{% if saved == 'ok' %}<p><span class="pill ok">gespeichert</span> Wirksam erst nach <span class="mono">systemctl restart knx-ha2timescale</span> — die Verbindung wird nur beim Start aufgebaut.</p>{% endif %}
+{% if saved == 'keyring' %}<p><span class="pill ok">Keyring gespeichert</span> Wähle unten den Tunnel und stelle den Modus um.</p>{% endif %}
+{% if saved == 'invalid' %}<p><span class="pill bad">nicht gespeichert</span> Die Datei liess sich mit diesem Passwort nicht öffnen — der bisherige Keyring bleibt unverändert.</p>{% endif %}
+{% if error %}<p><span class="pill bad">Keyring nicht lesbar</span> <span class="mono">{{ error }}</span></p>{% endif %}
+
+<form method="post" action="/knx/connection">
+
+<h2>1 · Modus</h2>
+<table>
+  <tr><th style="width:200px">Verbindungsart</th><td>
+    <select name="connection" id="mode" onchange="modeChanged()">
+      {% for m, label, desc in modes %}
+      <option value="{{ m }}" {{ 'selected' if mode==m }} data-desc="{{ desc }}">{{ label }}</option>
+      {% endfor %}
+    </select>
+    <div class="dim" id="modedesc" style="margin-top:6px">
+      {% for m, label, desc in modes %}{% if mode==m %}{{ desc }}{% endif %}{% endfor %}
+    </div>
+  </td></tr>
+</table>
+
+<h2>2 · Gateway</h2>
+<p class="note" id="gwnote">{{ 'Bei Routing wird kein Gateway angesprochen — diese Felder bleiben ungenutzt.' if not is_tunnel else 'Adresse und Port des KNXnet/IP-Interface.' }}</p>
+<table id="gwtable">
+  <tr><th style="width:200px">Gateway-Adresse</th>
+      <td><input name="gateway_host" value="{{ cfg.get('knx.gateway_host') or '' }}" class="mono" style="width:200px"></td></tr>
+  <tr><th>Port</th>
+      <td><input name="gateway_port" value="{{ cfg.get('knx.gateway_port') or '' }}" class="mono" style="width:100px">
+      <span class="dim" style="margin-left:8px">unverschlüsselt meist 3671 oder 3674, Secure-Tunneling in der Regel 3671</span></td></tr>
+  <tr><th>Eigene Busadresse</th>
+      <td><input name="individual_address" value="{{ cfg.get('knx.individual_address') or '' }}" class="mono" style="width:120px" placeholder="leer = auto">
+      <span class="dim" style="margin-left:8px">leer heisst: das Gateway vergibt eine freie Adresse</span></td></tr>
+</table>
+
+<h2>3 · KNX IP Secure</h2>
+<div id="securebox">
+<p class="note" id="secnote">{{ 'Nur bei den beiden Secure-Modi relevant.' if not is_secure else 'Schlüssel und Tunnelbenutzer stammen aus dem ETS-Keyring.' }}</p>
+<table>
+  <tr><th style="width:200px">Keyring</th><td>
+    {% if st.present %}<span class="pill ok">hinterlegt</span>
+      <span class="mono dim" style="margin-left:8px">{{ st.path }}, {{ st.size }} Bytes</span>
+      {% if not st.password_stored %}<span class="pill bad" style="margin-left:8px">Passwort fehlt</span>{% endif %}
+    {% else %}<span class="pill bad">nicht hinterlegt</span>{% endif %}
+  </td></tr>
+  <tr><th>Tunnel-Benutzer</th>
+      <td><input name="secure_user_id" value="{{ cfg.get('knx.secure_user_id') or '' }}" class="mono" style="width:100px" placeholder="leer = auto">
+      <span class="dim" style="margin-left:8px">leer heisst: erster passender Tunnel des Gateways</span></td></tr>
+</table>
+{% if interfaces %}
+<table style="margin-top:12px">
+  <tr><th>Host</th><th>Benutzer-ID</th><th>Physikalische Adresse</th><th>Typ</th></tr>
+  {% for i in interfaces %}
+  <tr><td class="mono">{{ i.host or '—' }}</td><td class="mono">{{ i.user_id if i.user_id is not none else '—' }}</td>
+      <td class="mono">{{ i.individual_address or '—' }}</td><td class="dim">{{ i.type }}</td></tr>
+  {% endfor %}
+</table>
+{% endif %}
+</div>
+
+<p><button class="act" style="margin-top:16px">Speichern</button></p>
+</form>
+
+<h2>Keyring {{ 'ersetzen' if st.present else 'hochladen' }}</h2>
+<p class="note">Export aus ETS: <i>Berichte → Projekt-Sicherheit → Keyring exportieren</i>. Die Datei wird vor dem Ablegen mit dem Passwort geöffnet; schlägt das fehl, bleibt der bisherige Stand erhalten. Passwort und Schlüssel landen in <span class="mono">/var/lib/knx-ha2timescale</span> mit 0600.</p>
+<form method="post" action="/knx/connection/keyring" enctype="multipart/form-data" class="bar">
+  <input type="file" name="file" accept=".knxkeys" required>
+  <input type="password" name="password" placeholder="Keyring-Passwort" style="min-width:240px" required>
+  <button class="act">Prüfen und speichern</button>
+</form>
+
+<script>
+// Was im gewählten Modus keine Rolle spielt, wird ausgegraut statt versteckt —
+// so bleibt sichtbar, dass es die Einstellung gibt.
+var SECURE = ['tunnel_secure', 'routing_secure'];
+var TUNNEL = ['tunnel', 'tunnel_tcp', 'tunnel_secure'];
+function dim(el, off) {
+  el.style.opacity = off ? 0.4 : 1;
+  el.querySelectorAll('input').forEach(function (i) { i.disabled = off; });
+}
+function modeChanged() {
+  var sel = document.getElementById('mode'), m = sel.value;
+  document.getElementById('modedesc').textContent =
+    sel.options[sel.selectedIndex].dataset.desc;
+  dim(document.getElementById('gwtable'), TUNNEL.indexOf(m) < 0);
+  dim(document.getElementById('securebox'), SECURE.indexOf(m) < 0);
+  document.getElementById('gwnote').textContent = TUNNEL.indexOf(m) < 0
+    ? 'Bei Routing wird kein Gateway angesprochen — diese Felder bleiben ungenutzt.'
+    : 'Adresse und Port des KNXnet/IP-Interface.';
+  document.getElementById('secnote').textContent = SECURE.indexOf(m) < 0
+    ? 'Nur bei den beiden Secure-Modi relevant.'
+    : 'Schlüssel und Tunnelbenutzer stammen aus dem ETS-Keyring.';
+}
+modeChanged();
+</script>
+{% endblock %}

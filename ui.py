@@ -256,10 +256,35 @@ def ha_toggle(entity_id: str = Form(...), q: str = Form(""),
     return RedirectResponse(f"/ha?q={q}&only={only}", status_code=303)
 
 
-# ── KNX Secure keyring ────────────────────────────────────────────────────
-@app.get("/secure", response_class=HTMLResponse)
-def secure_view(request: Request, saved: str = "", _: str = Depends(auth)):
+# ── KNX connection ────────────────────────────────────────────────────────
+# One page owns every knx.* setting. Which of them matter depends on the
+# mode, so the page says so instead of leaving seven keys side by side.
+MODES = [
+    ("tunnel", "Tunnel über UDP",
+     "Klassische KNXnet/IP-Tunnelverbindung, unverschlüsselt. "
+     "Belegt einen Tunnel-Slot am Gateway."),
+    ("tunnel_tcp", "Tunnel über TCP",
+     "Wie oben, aber über TCP — robuster bei Paketverlust, ebenfalls "
+     "unverschlüsselt."),
+    ("tunnel_secure", "Tunnel mit KNX IP Secure",
+     "Verschlüsselter Tunnel über TCP. Braucht den Keyring aus ETS und muss "
+     "am Gateway freigeschaltet sein."),
+    ("routing", "Routing über Multicast",
+     "Hört auf 224.0.23.12 mit, ohne einen Tunnel-Slot zu belegen. Kein "
+     "Gateway nötig, dafür muss Multicast im Netz durchkommen."),
+    ("routing_secure", "Routing mit KNX IP Secure",
+     "Verschlüsseltes Multicast. Braucht den Keyring und eine Secure-Linie."),
+]
+SECURE_MODES = {"tunnel_secure", "routing_secure"}
+TUNNEL_MODES = {"tunnel", "tunnel_tcp", "tunnel_secure"}
+
+
+@app.get("/knx/connection", response_class=HTMLResponse)
+def connection_view(request: Request, saved: str = "", _: str = Depends(auth)):
     import keyring_store
+    cfg = dict(query(db.KNX_DSN,
+                     "SELECT key, value FROM settings WHERE key LIKE %s"
+                     " ORDER BY key", ("knx.%",)))
     st = keyring_store.status()
     interfaces, error = [], None
     if st.get("present") and st.get("password_stored"):
@@ -268,44 +293,47 @@ def secure_view(request: Request, saved: str = "", _: str = Depends(auth)):
                 keyring_store.KEYRING_FILE, keyring_store.keyring_password())
         except Exception as exc:  # noqa: BLE001 — shown to the user
             error = str(exc)
-    rows = query(db.KNX_DSN,
-                 "SELECT key, value FROM settings WHERE key LIKE %s"
-                 " ORDER BY key", ("knx.%",))
-    return page(request, "secure.html", st=st, interfaces=interfaces,
-                error=error, cfg=dict(rows), saved=saved)
+    mode = cfg.get("knx.connection") or "tunnel"
+    return page(request, "connection.html", cfg=cfg, st=st, error=error,
+                interfaces=interfaces, modes=MODES, mode=mode,
+                is_secure=mode in SECURE_MODES,
+                is_tunnel=mode in TUNNEL_MODES, saved=saved)
 
 
-@app.post("/secure/upload")
-async def secure_upload(file: UploadFile, password: str = Form(...),
-                        _: str = Depends(auth)):
+@app.post("/knx/connection")
+def connection_save(connection: str = Form(...), gateway_host: str = Form(""),
+                    gateway_port: str = Form(""),
+                    individual_address: str = Form(""),
+                    secure_user_id: str = Form(""), _: str = Depends(auth)):
+    if connection not in {m for m, _label, _desc in MODES}:
+        raise HTTPException(400, "unknown connection mode")
+    for key, value in [
+        ("knx.connection", connection),
+        ("knx.gateway_host", gateway_host.strip()),
+        ("knx.gateway_port", gateway_port.strip()),
+        ("knx.individual_address", individual_address.strip()),
+        ("knx.secure_user_id", secure_user_id.strip()),
+    ]:
+        execute(db.KNX_DSN,
+                "UPDATE settings SET value = %s, updated_at = now()"
+                " WHERE key = %s", (value, key))
+    return RedirectResponse("/knx/connection?saved=ok", status_code=303)
+
+
+@app.post("/knx/connection/keyring")
+async def connection_keyring(file: UploadFile, password: str = Form(...),
+                             _: str = Depends(auth)):
     import keyring_store
-    data = await file.read()
     try:
-        keyring_store.store(data, password)
-    except Exception as exc:  # noqa: BLE001
-        JOBS["keyring_error"] = str(exc)
-        return RedirectResponse("/secure?saved=invalid", status_code=303)
+        keyring_store.store(await file.read(), password)
+    except Exception:  # noqa: BLE001 — wrong password or not a keyring
+        return RedirectResponse("/knx/connection?saved=invalid",
+                                status_code=303)
     execute(db.KNX_DSN,
             "UPDATE settings SET value = %s, updated_at = now()"
             " WHERE key = 'knx.keyring_path'",
             (str(keyring_store.KEYRING_FILE),))
-    return RedirectResponse("/secure?saved=ok", status_code=303)
-
-
-@app.post("/secure/mode")
-def secure_mode(connection: str = Form(...), user_id: str = Form(""),
-                gateway_port: str = Form(""), _: str = Depends(auth)):
-    execute(db.KNX_DSN,
-            "UPDATE settings SET value = %s, updated_at = now()"
-            " WHERE key = 'knx.connection'", (connection,))
-    execute(db.KNX_DSN,
-            "UPDATE settings SET value = %s, updated_at = now()"
-            " WHERE key = 'knx.secure_user_id'", (user_id.strip(),))
-    if gateway_port.strip():
-        execute(db.KNX_DSN,
-                "UPDATE settings SET value = %s, updated_at = now()"
-                " WHERE key = 'knx.gateway_port'", (gateway_port.strip(),))
-    return RedirectResponse("/secure?saved=mode", status_code=303)
+    return RedirectResponse("/knx/connection?saved=keyring", status_code=303)
 
 
 # ── patterns ──────────────────────────────────────────────────────────────
@@ -338,8 +366,11 @@ def pattern_delete(id: int = Form(...), _: str = Depends(auth)):
 # ── settings ──────────────────────────────────────────────────────────────
 @app.get("/settings", response_class=HTMLResponse)
 def settings_view(request: Request, _: str = Depends(auth)):
+    # knx.* lives on its own page — everything about one connection in one
+    # place beats a flat key/value list.
     rows = query(db.KNX_DSN,
-                 "SELECT key, value, note FROM settings ORDER BY key")
+                 "SELECT key, value, note FROM settings"
+                 " WHERE key NOT LIKE %s ORDER BY key", ("knx.%",))
     return page(request, "settings.html", rows=rows)
 
 
