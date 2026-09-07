@@ -155,6 +155,76 @@ def knx_lock(address: str = Form(...), q: str = Form(""),
     return RedirectResponse(f"/knx?q={q}&only={only}", status_code=303)
 
 
+# ── single group address ──────────────────────────────────────────────────
+def describe_dpt(dpt: str | None) -> tuple[str, str | None]:
+    """Validate a DPT against xknx and describe what it decodes to."""
+    if not dpt:
+        return "kein DPT — Werte werden als Hex gespeichert", None
+    from knx_source import transcoder_for
+    t = transcoder_for(dpt)
+    if t is None:
+        return f"unbekannt — xknx kennt {dpt} nicht, Werte kaemen als Hex", None
+    unit = getattr(t, "unit", None)
+    return f"{t.__name__}" + (f", Einheit {unit}" if unit else ""), unit
+
+
+@app.get("/knx/{address:path}/edit", response_class=HTMLResponse)
+def knx_edit(request: Request, address: str, saved: str = "",
+             _: str = Depends(auth)):
+    rows = query(db.KNX_DSN,
+                 "SELECT address, name, dpt, archive, origin, locked, note,"
+                 " description, first_seen, last_seen"
+                 " FROM knx_ga WHERE address = %s", (address,))
+    if not rows:
+        raise HTTPException(404, "unknown group address")
+    cols = ["address", "name", "dpt", "archive", "origin", "locked", "note",
+            "description", "first_seen", "last_seen"]
+    ga = dict(zip(cols, rows[0]))
+    stored_unit = query(db.KNX_DSN,
+                        "SELECT unit FROM knx_dpt_unit WHERE dpt = %s",
+                        (ga["dpt"],)) if ga["dpt"] else []
+    desc, unit = describe_dpt(ga["dpt"])
+    recent = query(db.KNX_DSN,
+                   "SELECT time, knxvalue, knxunit FROM knx_measurements"
+                   " WHERE destination = %s AND time > now() - interval '2 days'"
+                   " ORDER BY time DESC LIMIT 8", (address,))
+    return page(request, "knx_edit.html", ga=ga, desc=desc,
+                stored_unit=stored_unit[0][0] if stored_unit else None,
+                recent=recent, saved=saved)
+
+
+@app.post("/knx/{address:path}/edit")
+def knx_edit_save(address: str, dpt: str = Form(""), note: str = Form(""),
+                  locked: str = Form(""), archive: str = Form(""),
+                  _: str = Depends(auth)):
+    dpt = dpt.strip() or None
+    if dpt:
+        desc, _unit = describe_dpt(dpt)
+        if desc.startswith("unbekannt"):
+            return RedirectResponse(
+                f"/knx/{address}/edit?saved=invalid", status_code=303)
+    execute(db.KNX_DSN,
+            "UPDATE knx_ga SET dpt = %s, note = %s, locked = %s,"
+            " archive = %s, updated_at = now() WHERE address = %s",
+            (dpt, note or None, locked == "on", archive == "on", address))
+    reload_collector()
+    return RedirectResponse(f"/knx/{address}/edit?saved=ok", status_code=303)
+
+
+def reload_collector() -> None:
+    """Ask the collector to re-read the registry instead of waiting for its
+    ten minute cycle. Best effort: the UI may lack permission to signal it."""
+    import signal
+    import subprocess
+    try:
+        out = subprocess.run(["pgrep", "-f", "python -u service.py"],
+                             capture_output=True, text=True, timeout=5)
+        for pid in out.stdout.split():
+            os.kill(int(pid), signal.SIGHUP)
+    except Exception:  # noqa: BLE001 — reload is a convenience, not a promise
+        pass
+
+
 # ── Home Assistant entities ───────────────────────────────────────────────
 @app.get("/ha", response_class=HTMLResponse)
 def ha_list(request: Request, q: str = "", only: str = "all",

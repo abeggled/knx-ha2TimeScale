@@ -14,7 +14,7 @@
   <tr><th>Adresse</th><th>Name</th><th>DPT</th><th>geschützt</th><th>Herkunft</th><th>zuletzt gesehen</th><th>Archiv</th></tr>
   {% for a, n, d, arch, o, ls, lock in rows %}
   <tr>
-    <td class="mono">{{ a }}</td>
+    <td class="mono"><a href="/knx/{{ a }}/edit" style="color:var(--acc);text-decoration:none">{{ a }}</a></td>
     <td>{{ n or '—' }}</td>
     <td class="mono {{ 'warn' if not d }}">{{ d or '—' }}</td>
     <td>
@@ -41,5 +41,5 @@
 <p class="note">{{ rows|length }} Einträge (max. 500).
 <b>Archiv</b> steuert, ob Telegramme dieser Adresse gespeichert werden.
 <b>Geschützt</b> friert Name und DPT ein — ein ETS-Import meldet die Abweichung dann nur, statt sie zu überschreiben. Die beiden sind unabhängig voneinander.
-<b>Herkunft</b> zeigt, woher Name und DPT stammen, und wird nie von Hand gesetzt.</p>
+<b>Herkunft</b> zeigt, woher Name und DPT stammen, und wird nie von Hand gesetzt.<br>Ein Klick auf die Adresse öffnet die Detailansicht mit DPT-Korrektur und den letzten Werten.</p>
 {% endblock %}

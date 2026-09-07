@@ -1,0 +1,65 @@
+{% extends "base.html" %}{% set nav='knx' %}
+{% block body %}
+<p><a href="/knx" style="color:var(--acc);text-decoration:none">&larr; zurück zur Liste</a></p>
+<h2 class="mono">{{ ga.address }} — {{ ga.name or 'ohne Namen' }}</h2>
+
+{% if saved == 'ok' %}<p><span class="pill ok">gespeichert</span> Der Collector wurde zum Neuladen aufgefordert.</p>{% endif %}
+{% if saved == 'invalid' %}<p><span class="pill bad">nicht gespeichert</span> Der eingegebene DPT ist xknx nicht bekannt.</p>{% endif %}
+
+<div class="cards">
+  <div class="card"><div class="k">Herkunft</div><div class="v" style="font-size:16px">{{ ga.origin }}</div>
+    <div class="dim">wird nicht von Hand gesetzt</div></div>
+  <div class="card"><div class="k">Erstmals gesehen</div><div class="v" style="font-size:16px">{{ ga.first_seen.strftime('%d.%m.%Y') if ga.first_seen else '—' }}</div></div>
+  <div class="card"><div class="k">Zuletzt gesehen</div><div class="v" style="font-size:16px">{{ ga.last_seen.strftime('%d.%m. %H:%M') if ga.last_seen else '—' }}</div></div>
+</div>
+
+<h2>Bearbeiten</h2>
+<form method="post">
+<table>
+  <tr><th style="width:180px">Feld</th><th>Wert</th></tr>
+  <tr><td>DPT</td>
+      <td><input name="dpt" id="dpt" value="{{ ga.dpt or '' }}" class="mono" style="width:160px" placeholder="z.B. 5.001">
+          <span class="dim" style="margin-left:10px">aktuell: {{ desc }}</span></td></tr>
+  <tr><td>Einheit im Archiv</td>
+      <td class="mono">{{ stored_unit or 'unknown' }}
+          <span class="dim">— stammt aus dem Bestand und gewinnt gegen die xknx-Einheit</span></td></tr>
+  <tr><td>Notiz</td>
+      <td><input name="note" value="{{ ga.note or '' }}" style="width:100%" placeholder="warum weicht der Wert ab?"></td></tr>
+  <tr><td>Geschützt</td>
+      <td><label><input type="checkbox" name="locked" id="locked" {{ 'checked' if ga.locked }}>
+          Name und DPT gegen ETS-Import schützen</label>
+          <div class="dim" id="lockhint">Ohne Schutz überschreibt der nächste Import eine Handkorrektur wieder.</div></td></tr>
+  <tr><td>Archivieren</td>
+      <td><label><input type="checkbox" name="archive" {{ 'checked' if ga.archive }}>
+          Telegramme dieser Adresse speichern</label></td></tr>
+</table>
+<p><button class="act" style="margin-top:12px">Speichern</button></p>
+</form>
+
+<p class="note">Eine DPT-Änderung wirkt nur auf neue Telegramme — bereits gespeicherte Werte bleiben, wie sie dekodiert wurden.</p>
+
+<h2>Letzte Werte</h2>
+{% if recent %}
+<table>
+  <tr><th>Zeitpunkt</th><th>Wert</th><th>Einheit</th></tr>
+  {% for t, v, u in recent %}
+  <tr><td class="dim">{{ t.strftime('%d.%m. %H:%M:%S') }}</td><td class="mono">{{ v }}</td><td class="dim">{{ u }}</td></tr>
+  {% endfor %}
+</table>
+<p class="note">Hex-Werte wie <span class="mono">0x1a2b</span> bedeuten, dass der DPT nicht passt.</p>
+{% else %}<p class="dim">keine Telegramme in den letzten zwei Tagen</p>{% endif %}
+<script>
+// Wer den DPT von Hand ändert, will ihn fast sicher behalten — Häkchen setzen,
+// sichtbar und widerrufbar, statt es stillschweigend zu tun.
+(function () {
+  var dpt = document.getElementById('dpt'), lock = document.getElementById('locked'),
+      hint = document.getElementById('lockhint'), original = dpt.value;
+  dpt.addEventListener('input', function () {
+    if (dpt.value !== original && !lock.checked) {
+      lock.checked = true;
+      hint.textContent = 'Automatisch gesetzt, weil du den DPT geändert hast — du kannst es abwählen.';
+    }
+  });
+})();
+</script>
+{% endblock %}
