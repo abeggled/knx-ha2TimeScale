@@ -14,7 +14,8 @@
 </div>
 
 <h2>Bearbeiten</h2>
-<form method="post">
+<form method="post" action="/knx/edit">
+<input type="hidden" name="address" value="{{ ga.address }}">
 <table>
   <tr><th style="width:180px">Feld</th><th>Wert</th></tr>
   <tr><td>DPT</td>

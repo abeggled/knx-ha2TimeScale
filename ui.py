@@ -23,6 +23,7 @@ import tempfile
 import threading
 import uuid
 from typing import Any
+from urllib.parse import quote
 
 import psycopg
 from fastapi import Depends, FastAPI, Form, HTTPException, Request, UploadFile
@@ -168,7 +169,9 @@ def describe_dpt(dpt: str | None) -> tuple[str, str | None]:
     return f"{t.__name__}" + (f", Einheit {unit}" if unit else ""), unit
 
 
-@app.get("/knx/{address:path}/edit", response_class=HTMLResponse)
+# Group addresses contain slashes, so they travel as a query parameter:
+# Starlette's greedy path converter would swallow the trailing segment.
+@app.get("/knx/edit", response_class=HTMLResponse)
 def knx_edit(request: Request, address: str, saved: str = "",
              _: str = Depends(auth)):
     rows = query(db.KNX_DSN,
@@ -193,22 +196,24 @@ def knx_edit(request: Request, address: str, saved: str = "",
                 recent=recent, saved=saved)
 
 
-@app.post("/knx/{address:path}/edit")
-def knx_edit_save(address: str, dpt: str = Form(""), note: str = Form(""),
-                  locked: str = Form(""), archive: str = Form(""),
-                  _: str = Depends(auth)):
+@app.post("/knx/edit")
+def knx_edit_save(address: str = Form(...), dpt: str = Form(""),
+                  note: str = Form(""), locked: str = Form(""),
+                  archive: str = Form(""), _: str = Depends(auth)):
     dpt = dpt.strip() or None
     if dpt:
         desc, _unit = describe_dpt(dpt)
         if desc.startswith("unbekannt"):
             return RedirectResponse(
-                f"/knx/{address}/edit?saved=invalid", status_code=303)
+                f"/knx/edit?address={quote(address)}&saved=invalid",
+                status_code=303)
     execute(db.KNX_DSN,
             "UPDATE knx_ga SET dpt = %s, note = %s, locked = %s,"
             " archive = %s, updated_at = now() WHERE address = %s",
             (dpt, note or None, locked == "on", archive == "on", address))
     reload_collector()
-    return RedirectResponse(f"/knx/{address}/edit?saved=ok", status_code=303)
+    return RedirectResponse(f"/knx/edit?address={quote(address)}&saved=ok",
+                            status_code=303)
 
 
 def reload_collector() -> None:
