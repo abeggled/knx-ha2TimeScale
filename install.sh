@@ -39,8 +39,10 @@ if [[ ! -x "$DEST/.venv/bin/python" ]]; then
         "$DEST/.venv/bin/python" /tmp/get-pip.py -q
         rm -f /tmp/get-pip.py
     fi
-    "$DEST/.venv/bin/pip" -q install -r "$DEST/requirements.txt"
 fi
+
+# Always sync dependencies: the venv may predate a new requirement.
+"$DEST/.venv/bin/pip" -q install -r "$DEST/requirements.txt"
 
 chown -R "$USER_NAME:$USER_NAME" "$DEST"
 chown root:"$USER_NAME" "$ENV_FILE"
