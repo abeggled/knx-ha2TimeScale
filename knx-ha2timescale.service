@@ -8,6 +8,9 @@ Wants=network-online.target
 Type=simple
 User=collector
 WorkingDirectory=/opt/knx-ha2timescale
+# /var/lib/knx-ha2timescale — holds the KNX Secure keyring, written by the UI
+StateDirectory=knx-ha2timescale
+StateDirectoryMode=0750
 EnvironmentFile=/etc/knx-ha2timescale.env
 ExecStart=/opt/knx-ha2timescale/.venv/bin/python -u service.py
 ExecReload=/bin/kill -HUP $MAINPID

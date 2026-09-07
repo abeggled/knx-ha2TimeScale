@@ -256,6 +256,58 @@ def ha_toggle(entity_id: str = Form(...), q: str = Form(""),
     return RedirectResponse(f"/ha?q={q}&only={only}", status_code=303)
 
 
+# ── KNX Secure keyring ────────────────────────────────────────────────────
+@app.get("/secure", response_class=HTMLResponse)
+def secure_view(request: Request, saved: str = "", _: str = Depends(auth)):
+    import keyring_store
+    st = keyring_store.status()
+    interfaces, error = [], None
+    if st.get("present") and st.get("password_stored"):
+        try:
+            interfaces = keyring_store.describe(
+                keyring_store.KEYRING_FILE, keyring_store.keyring_password())
+        except Exception as exc:  # noqa: BLE001 — shown to the user
+            error = str(exc)
+    rows = query(db.KNX_DSN,
+                 "SELECT key, value FROM settings WHERE key LIKE %s"
+                 " ORDER BY key", ("knx.%",))
+    return page(request, "secure.html", st=st, interfaces=interfaces,
+                error=error, cfg=dict(rows), saved=saved)
+
+
+@app.post("/secure/upload")
+async def secure_upload(file: UploadFile, password: str = Form(...),
+                        _: str = Depends(auth)):
+    import keyring_store
+    data = await file.read()
+    try:
+        keyring_store.store(data, password)
+    except Exception as exc:  # noqa: BLE001
+        JOBS["keyring_error"] = str(exc)
+        return RedirectResponse("/secure?saved=invalid", status_code=303)
+    execute(db.KNX_DSN,
+            "UPDATE settings SET value = %s, updated_at = now()"
+            " WHERE key = 'knx.keyring_path'",
+            (str(keyring_store.KEYRING_FILE),))
+    return RedirectResponse("/secure?saved=ok", status_code=303)
+
+
+@app.post("/secure/mode")
+def secure_mode(connection: str = Form(...), user_id: str = Form(""),
+                gateway_port: str = Form(""), _: str = Depends(auth)):
+    execute(db.KNX_DSN,
+            "UPDATE settings SET value = %s, updated_at = now()"
+            " WHERE key = 'knx.connection'", (connection,))
+    execute(db.KNX_DSN,
+            "UPDATE settings SET value = %s, updated_at = now()"
+            " WHERE key = 'knx.secure_user_id'", (user_id.strip(),))
+    if gateway_port.strip():
+        execute(db.KNX_DSN,
+                "UPDATE settings SET value = %s, updated_at = now()"
+                " WHERE key = 'knx.gateway_port'", (gateway_port.strip(),))
+    return RedirectResponse("/secure?saved=mode", status_code=303)
+
+
 # ── patterns ──────────────────────────────────────────────────────────────
 @app.get("/patterns", response_class=HTMLResponse)
 def patterns(request: Request, _: str = Depends(auth)):

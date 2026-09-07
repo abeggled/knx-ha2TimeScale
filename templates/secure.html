@@ -1,0 +1,58 @@
+{% extends "base.html" %}{% set nav='secure' %}
+{% block body %}
+<h2>KNX IP Secure</h2>
+
+{% if saved == 'ok' %}<p><span class="pill ok">Keyring gespeichert</span> Wähle unten den Tunnel und den Modus.</p>{% endif %}
+{% if saved == 'mode' %}<p><span class="pill ok">gespeichert</span> Die Verbindung wird erst bei einem Neustart des Collectors neu aufgebaut: <span class="mono">systemctl restart knx-ha2timescale</span></p>{% endif %}
+{% if saved == 'invalid' %}<p><span class="pill bad">nicht gespeichert</span> Die Datei liess sich mit diesem Passwort nicht öffnen — bestehender Keyring bleibt unverändert.</p>{% endif %}
+{% if error %}<p><span class="pill bad">Keyring nicht lesbar</span> <span class="mono">{{ error }}</span></p>{% endif %}
+
+<h2>Keyring</h2>
+{% if st.present %}
+<table>
+  <tr><th style="width:180px">Datei</th><td class="mono">{{ st.path }}</td></tr>
+  <tr><th>Grösse</th><td>{{ st.size }} Bytes</td></tr>
+  <tr><th>Passwort hinterlegt</th><td>{% if st.password_stored %}<span class="pill ok">ja</span>{% else %}<span class="pill bad">nein</span>{% endif %}</td></tr>
+</table>
+{% else %}
+<p class="dim">Noch kein Keyring hinterlegt.</p>
+{% endif %}
+
+<h2>{{ 'Ersetzen' if st.present else 'Hochladen' }}</h2>
+<p class="note">Export aus ETS: <i>Berichte → Projekt-Sicherheit → Keyring exportieren</i>. Die Datei wird vor dem Speichern mit dem Passwort geöffnet — schlägt das fehl, bleibt der bisherige Stand erhalten.</p>
+<form method="post" action="/secure/upload" enctype="multipart/form-data" class="bar">
+  <input type="file" name="file" accept=".knxkeys" required>
+  <input type="password" name="password" placeholder="Keyring-Passwort" style="min-width:240px" required>
+  <button class="act">Prüfen und speichern</button>
+</form>
+
+{% if interfaces %}
+<h2>Tunnel im Keyring</h2>
+<p class="note">Trage die passende Benutzer-ID unten ein. Leer heisst: xknx nimmt den ersten passenden Tunnel des Gateways.</p>
+<table>
+  <tr><th>Host</th><th>Benutzer-ID</th><th>Physikalische Adresse</th><th>Typ</th></tr>
+  {% for i in interfaces %}
+  <tr><td class="mono">{{ i.host or '—' }}</td><td class="mono">{{ i.user_id if i.user_id is not none else '—' }}</td>
+      <td class="mono">{{ i.individual_address or '—' }}</td><td class="dim">{{ i.type }}</td></tr>
+  {% endfor %}
+</table>
+{% endif %}
+
+<h2>Verbindung</h2>
+<form method="post" action="/secure/mode">
+<table>
+  <tr><th style="width:180px">Modus</th><td>
+    <select name="connection">
+      {% for m, label in [('tunnel','tunnel — UDP, unverschlüsselt'),('tunnel_tcp','tunnel_tcp — TCP, unverschlüsselt'),('tunnel_secure','tunnel_secure — KNX IP Secure über TCP'),('routing','routing — Multicast, unverschlüsselt'),('routing_secure','routing_secure — Secure Multicast')] %}
+      <option value="{{ m }}" {{ 'selected' if cfg.get('knx.connection')==m }}>{{ label }}</option>
+      {% endfor %}
+    </select></td></tr>
+  <tr><th>Benutzer-ID</th><td><input name="user_id" value="{{ cfg.get('knx.secure_user_id') or '' }}" class="mono" style="width:100px" placeholder="leer = auto"></td></tr>
+  <tr><th>Gateway-Port</th><td><input name="gateway_port" value="{{ cfg.get('knx.gateway_port') or '' }}" class="mono" style="width:100px">
+      <span class="dim" style="margin-left:8px">unverschlüsselt oft 3671 oder 3674, Secure-Tunneling in der Regel 3671</span></td></tr>
+  <tr><th>Gateway</th><td class="mono dim">{{ cfg.get('knx.gateway_host') or '—' }} <span style="margin-left:8px">(unter Einstellungen änderbar)</span></td></tr>
+</table>
+<p><button class="act" style="margin-top:12px">Speichern</button></p>
+</form>
+<p class="note">Nach dem Speichern: <span class="mono">systemctl restart knx-ha2timescale</span>. Klappt der Verbindungsaufbau nicht, stirbt der KNX-Teil — sichtbar auf der Statusseite als „getrennt“ und im Journal.</p>
+{% endblock %}

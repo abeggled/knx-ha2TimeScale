@@ -148,15 +148,17 @@ class KNXSource:
         if mode in ("tunnel_secure", "routing_secure"):
             # Keys come from the ETS keyring export. Its password is a secret
             # and therefore lives in the environment, not in settings.
-            keyfile = s.get("knx.keyring_path") or None
-            keypass = os.environ.get(s.get("knx.keyring_password_env")
-                                     or "KNX_KEYRING_PASSWORD")
-            if not keyfile:
-                raise RuntimeError("setting knx.keyring_path is empty")
+            import keyring_store
+            keyfile = s.get("knx.keyring_path") or str(keyring_store.KEYRING_FILE)
+            keypass = keyring_store.keyring_password()
+            if not os.path.exists(keyfile):
+                raise RuntimeError(
+                    f"keyring file not found: {keyfile} — upload it in the UI"
+                )
             if not keypass:
                 raise RuntimeError(
-                    "keyring password missing — set the environment variable "
-                    f"{s.get('knx.keyring_password_env') or 'KNX_KEYRING_PASSWORD'}"
+                    "keyring password missing — upload the keyring in the UI "
+                    "or set KNX_KEYRING_PASSWORD"
                 )
             secure = SecureConfig(
                 knxkeys_file_path=keyfile,
