@@ -16,6 +16,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import json
 import os
 import secrets
 import sys
@@ -344,6 +345,45 @@ async def connection_keyring(file: UploadFile, password: str = Form(...),
             " WHERE key = 'knx.keyring_path'",
             (str(keyring_store.KEYRING_FILE),))
     return RedirectResponse("/knx/connection?saved=keyring", status_code=303)
+
+
+# ── messages: raw values and dropped rows ─────────────────────────────────
+@app.get("/messages", response_class=HTMLResponse)
+def messages(request: Request, hours: int = 24, _: str = Depends(auth)):
+    hours = max(1, min(hours, 168))
+    raw = query(db.KNX_DSN,
+                "SELECT m.time, m.source, m.destination, m.dpt, m.knxvalue,"
+                "       g.name, g.note"
+                " FROM knx_measurements m"
+                " LEFT JOIN knx_ga g ON g.address = m.destination"
+                " WHERE m.time > now() - make_interval(hours => %s)"
+                "   AND m.knxvalue LIKE '0x%%'"
+                " ORDER BY m.time DESC LIMIT 200", (hours,))
+
+    import writer
+    dropped, spool_size = [], 0
+    try:
+        spool_size = writer.SPOOL_FILE.stat().st_size
+        lines = writer.SPOOL_FILE.read_text().splitlines()[-200:]
+        for line in reversed(lines):
+            try:
+                dropped.append(json.loads(line))
+            except ValueError:
+                continue
+    except OSError:
+        pass
+    return page(request, "messages.html", raw=raw, dropped=dropped,
+                hours=hours, spool_size=spool_size)
+
+
+@app.post("/messages/clear")
+def messages_clear(_: str = Depends(auth)):
+    import writer
+    try:
+        writer.SPOOL_FILE.unlink(missing_ok=True)
+    except OSError:
+        pass
+    return RedirectResponse("/messages", status_code=303)
 
 
 # ── patterns ──────────────────────────────────────────────────────────────

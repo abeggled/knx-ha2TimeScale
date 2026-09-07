@@ -1,0 +1,51 @@
+{% extends "base.html" %}{% set nav='messages' %}
+{% block body %}
+
+<h2>Rohwerte</h2>
+<p class="note">Telegramme, die nicht dekodiert werden konnten und als Hex im Archiv stehen. Sie sind <b>nicht verloren</b> — sobald der richtige DPT hinterlegt ist, lassen sich die Bytes nachträglich lesen. Ein Klick auf die Adresse führt zur Korrektur.</p>
+<form class="bar" method="get">
+  <label class="dim">Zeitraum</label>
+  <select name="hours" onchange="this.form.submit()">
+    {% for h, label in [(1,'letzte Stunde'),(24,'letzte 24 Stunden'),(168,'letzte 7 Tage')] %}
+    <option value="{{ h }}" {{ 'selected' if hours==h }}>{{ label }}</option>
+    {% endfor %}
+  </select>
+</form>
+{% if raw %}
+<table>
+  <tr><th>Zeitpunkt</th><th>von</th><th>an</th><th>DPT</th><th>Rohwert</th><th>Name</th></tr>
+  {% for t, src, dst, d, v, name, note in raw %}
+  <tr>
+    <td class="dim">{{ t.strftime('%d.%m. %H:%M:%S') }}</td>
+    <td class="mono dim">{{ src }}</td>
+    <td class="mono"><a href="/knx/edit?address={{ dst|urlencode }}" style="color:var(--acc);text-decoration:none">{{ dst }}</a></td>
+    <td class="mono">{{ d or '—' }}</td>
+    <td class="mono">{{ v }}</td>
+    <td>{{ name or '—' }}{% if note %} <span class="dim">— {{ note }}</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+<p class="note">{{ raw|length }} Einträge (max. 200).</p>
+{% else %}
+<p class="dim">Keine Rohwerte in diesem Zeitraum.</p>
+{% endif %}
+
+<h2>Verworfene Zeilen</h2>
+<p class="note">Verworfen wird nur, wenn die Datenbank so lange nicht erreichbar war, dass der Puffer von 100'000 Zeilen voll lief. Hier steht eine <b>Stichprobe</b>: bis zu 1000 Zeilen je Vorfall, damit ein Ausfall nicht die Platte füllt. Diese Zeilen sind endgültig verloren — die Liste sagt dir, <i>was</i> fehlt, nicht mehr.</p>
+{% if dropped %}
+<table>
+  <tr><th>Zeitpunkt</th><th>Ziel</th><th>Inhalt</th></tr>
+  {% for d in dropped %}
+  <tr><td class="dim">{{ d.at[11:19] }} <span class="dim">{{ d.at[:10] }}</span></td>
+      <td class="mono dim">{{ d.table }}</td>
+      <td class="mono">{{ d.row|join(' · ') }}</td></tr>
+  {% endfor %}
+</table>
+<form method="post" action="/messages/clear" style="margin-top:12px">
+  <button class="link">Liste leeren</button>
+  <span class="dim" style="margin-left:10px">Datei: {{ spool_size }} Bytes</span>
+</form>
+{% else %}
+<p><span class="pill ok">nichts verworfen</span></p>
+{% endif %}
+{% endblock %}
