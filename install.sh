@@ -25,7 +25,18 @@ install -m 644 -t "$DEST" \
     requirements.txt schema.sql schema_ha.sql
 
 if [[ ! -x "$DEST/.venv/bin/python" ]]; then
-    python3 -m venv "$DEST/.venv"
+    rm -rf "$DEST/.venv"
+    if python3 -m venv "$DEST/.venv" 2>/dev/null; then
+        :
+    else
+        # Debian ships python3 without ensurepip unless python3-venv is
+        # installed. Bootstrap pip instead of requiring another package.
+        echo "ensurepip unavailable, bootstrapping pip"
+        python3 -m venv --without-pip "$DEST/.venv"
+        python3 -c 'import urllib.request as u; open("/tmp/get-pip.py","wb").write(u.urlopen("https://bootstrap.pypa.io/get-pip.py", timeout=60).read())'
+        "$DEST/.venv/bin/python" /tmp/get-pip.py -q
+        rm -f /tmp/get-pip.py
+    fi
     "$DEST/.venv/bin/pip" -q install -r "$DEST/requirements.txt"
 fi
 
