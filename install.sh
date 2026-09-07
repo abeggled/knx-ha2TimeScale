@@ -19,10 +19,9 @@ id -u "$USER_NAME" >/dev/null 2>&1 || \
     useradd --system --home-dir "$DEST" --shell /usr/sbin/nologin "$USER_NAME"
 
 mkdir -p "$DEST"
-install -m 644 -t "$DEST" \
-    db.py registry.py writer.py knx_source.py ha_source.py service.py ui.py \
-    compare_dryrun.py import_knxproj.py seed_ga.py seed_units.py \
-    setup_ui_role.py requirements.txt schema.sql schema_ha.sql schema_status.sql
+# Everything the services need, by glob — a hand maintained list is one
+# forgotten entry away from a service that starts and then fails.
+install -m 644 -t "$DEST" ./*.py ./*.sql requirements.txt
 mkdir -p "$DEST/templates"
 install -m 644 -t "$DEST/templates" templates/*.html
 
