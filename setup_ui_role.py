@@ -16,6 +16,9 @@ KNX_GRANTS = """
 GRANT CONNECT ON DATABASE knx_data TO webui;
 GRANT USAGE ON SCHEMA public TO webui;
 GRANT SELECT ON collector_status, knx_dpt_unit TO webui;
+-- Read-only on the measurements: the group address detail page shows the
+-- last values so a DPT correction can be verified. No INSERT/UPDATE/DELETE.
+GRANT SELECT ON knx_measurements TO webui;
 GRANT SELECT, UPDATE ON settings TO webui;
 GRANT SELECT, INSERT, UPDATE ON knx_ga TO webui;
 GRANT SELECT, INSERT ON knx_import_log TO webui;
