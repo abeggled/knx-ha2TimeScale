@@ -17,7 +17,7 @@
   </div><div class="dim">{{ '{:,}'.format(st.ha_written).replace(',', "'") }} Zeilen geschrieben</div></div>
   <div class="card"><div class="k">Verworfen</div><div class="v">
     <span class="{{ 'bad' if (st.knx_dropped + st.ha_dropped) else '' }}">{{ st.knx_dropped + st.ha_dropped }}</span>
-  </div><div class="dim">unlesbar: {{ st.knx_undecoded }}</div></div>
+  </div><div class="dim">als Rohwert gespeichert: {{ st.knx_undecoded }}</div></div>
 </div>
 <table style="margin-top:16px">
   <tr><th></th><th>empfangen</th><th>geschrieben</th><th>ausgeschlossen</th></tr>
@@ -37,6 +37,19 @@
     <div class="v {{ 'warn' if no_dpt }}">{{ no_dpt|length }}</div>
     <div class="dim">werden als Rohwert gespeichert</div></div>
 </div>
+
+{% if raw %}
+<h2>Rohwerte statt dekodierter Werte</h2>
+<p class="note">Diese Adressen kommen als Hex ins Archiv, weil xknx ihren DPT nicht dekodieren kann. Steht eine Notiz dabei, ist das so gewollt — sonst lohnt ein Blick auf den DPT.</p>
+<table>
+  <tr><th>Adresse</th><th>Name</th><th>DPT</th><th>24 h</th><th>Notiz</th></tr>
+  {% for a, n, d, cnt, note in raw %}
+  <tr><td class="mono"><a href="/knx/edit?address={{ a|urlencode }}" style="color:var(--acc);text-decoration:none">{{ a }}</a></td>
+      <td>{{ n or '—' }}</td><td class="mono">{{ d or '—' }}</td><td class="mono">{{ cnt }}</td>
+      <td class="dim">{{ note or '' }}</td></tr>
+  {% endfor %}
+</table>
+{% endif %}
 
 {% if no_dpt %}
 <h2>Gruppenadressen ohne DPT</h2>

@@ -108,11 +108,21 @@ def status(request: Request, _: str = Depends(auth)):
                     " FROM knx_import_log ORDER BY imported_at DESC LIMIT 5")
     counts = query(db.KNX_DSN,
                    "SELECT count(*) FILTER (WHERE archive), count(*) FROM knx_ga")[0]
+    # Which addresses actually produce raw values — the bare counter says
+    # "unreadable" without saying what, which reads like a fault even when
+    # the raw bytes are wanted.
+    raw = query(db.KNX_DSN,
+                "SELECT m.destination, g.name, g.dpt, count(*), g.note"
+                " FROM knx_measurements m"
+                " LEFT JOIN knx_ga g ON g.address = m.destination"
+                " WHERE m.time > now() - interval '24 hours'"
+                "   AND m.knxvalue LIKE '0x%%'"
+                " GROUP BY 1, 2, 3, 5 ORDER BY 4 DESC LIMIT 10")
     ha_counts = query(db.HA_DSN,
                       "SELECT count(*) FILTER (WHERE archive), count(*)"
                       " FROM ha_entity")[0]
     return page(request, "status.html", st=st, no_dpt=no_dpt, imports=imports,
-                ga_counts=counts, ha_counts=ha_counts)
+                ga_counts=counts, ha_counts=ha_counts, raw=raw)
 
 
 # ── KNX group addresses ───────────────────────────────────────────────────
