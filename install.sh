@@ -53,15 +53,32 @@ systemctl daemon-reload
 systemctl enable knx-ha2timescale.service
 
 # The web UI is optional: enabled only when its environment file exists.
+UI_ENABLED=false
 if [[ -f /etc/knx-ha2timescale-ui.env ]]; then
     chown root:"$USER_NAME" /etc/knx-ha2timescale-ui.env
     chmod 640 /etc/knx-ha2timescale-ui.env
     install -m 644 knx-ha2timescale-ui.service /etc/systemd/system/
     systemctl daemon-reload
     systemctl enable knx-ha2timescale-ui.service
-    echo "web UI enabled"
+    UI_ENABLED=true
 fi
 
 echo
-echo "installed. Start with:  systemctl start knx-ha2timescale"
-echo "Logs:                   journalctl -u knx-ha2timescale -f"
+echo "installed."
+echo
+echo "  collector   systemctl start knx-ha2timescale"
+echo "              journalctl -u knx-ha2timescale -f"
+if $UI_ENABLED; then
+    UI_PORT=$(sed -n 's/^UI_PORT="\?\([0-9]*\)"\?/\1/p' /etc/knx-ha2timescale-ui.env)
+    echo
+    echo "  web UI      systemctl start knx-ha2timescale-ui"
+    echo "              journalctl -u knx-ha2timescale-ui -f"
+    echo "              http://$(hostname -f):${UI_PORT:-8080}"
+else
+    echo
+    echo "  web UI      not enabled — create /etc/knx-ha2timescale-ui.env"
+    echo "              (see setup_ui_role.py) and run this script again"
+fi
+echo
+echo "Both services are already running? Restart them to pick up the changes:"
+echo "  systemctl restart knx-ha2timescale${UI_ENABLED:+ knx-ha2timescale-ui}"
