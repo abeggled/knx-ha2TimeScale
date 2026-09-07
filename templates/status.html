@@ -1,0 +1,59 @@
+{% extends "base.html" %}{% set nav='status' %}
+{% block body %}
+{% if not st %}
+<p class="bad">Kein Heartbeat gefunden — läuft der Collector?</p>
+{% else %}
+{% set stale = st.age.total_seconds() > 120 %}
+<h2>Collector</h2>
+<div class="cards">
+  <div class="card"><div class="k">Zustand</div><div class="v">
+    <span class="pill {{ 'bad' if stale else 'ok' }}">{{ 'keine Meldung' if stale else 'läuft' }}</span>
+  </div><div class="dim">letzte Meldung vor {{ st.age.total_seconds()|int }} s</div></div>
+  <div class="card"><div class="k">KNX</div><div class="v">
+    <span class="pill {{ 'ok' if st.knx_connected else 'bad' }}">{{ 'verbunden' if st.knx_connected else 'getrennt' }}</span>
+  </div><div class="dim">{{ '{:,}'.format(st.knx_written).replace(',', "'") }} Zeilen geschrieben</div></div>
+  <div class="card"><div class="k">Home Assistant</div><div class="v">
+    <span class="pill {{ 'ok' if st.ha_connected else 'bad' }}">{{ 'verbunden' if st.ha_connected else 'getrennt' }}</span>
+  </div><div class="dim">{{ '{:,}'.format(st.ha_written).replace(',', "'") }} Zeilen geschrieben</div></div>
+  <div class="card"><div class="k">Verworfen</div><div class="v">
+    <span class="{{ 'bad' if (st.knx_dropped + st.ha_dropped) else '' }}">{{ st.knx_dropped + st.ha_dropped }}</span>
+  </div><div class="dim">unlesbar: {{ st.knx_undecoded }}</div></div>
+</div>
+<table style="margin-top:16px">
+  <tr><th></th><th>empfangen</th><th>geschrieben</th><th>ausgeschlossen</th></tr>
+  <tr><td>KNX</td><td class="mono">{{ st.knx_received }}</td><td class="mono">{{ st.knx_written }}</td><td class="mono">{{ st.knx_skipped }}</td></tr>
+  <tr><td>Home Assistant</td><td class="mono">{{ st.ha_received }}</td><td class="mono">{{ st.ha_written }}</td><td class="mono">{{ st.ha_skipped }}</td></tr>
+</table>
+<p class="note">Zähler seit dem Start des Collectors ({{ st.started_at }}).</p>
+{% endif %}
+
+<h2>Archivierung</h2>
+<div class="cards">
+  <div class="card"><div class="k">KNX-Gruppenadressen</div>
+    <div class="v">{{ ga_counts[0] }} <span class="dim" style="font-size:14px">von {{ ga_counts[1] }}</span></div></div>
+  <div class="card"><div class="k">HA-Entities</div>
+    <div class="v">{{ ha_counts[0] }} <span class="dim" style="font-size:14px">von {{ ha_counts[1] }}</span></div></div>
+  <div class="card"><div class="k">Ohne DPT</div>
+    <div class="v {{ 'warn' if no_dpt }}">{{ no_dpt|length }}</div>
+    <div class="dim">werden als Rohwert gespeichert</div></div>
+</div>
+
+{% if no_dpt %}
+<h2>Gruppenadressen ohne DPT</h2>
+<table>
+  <tr><th>Adresse</th><th>Name</th></tr>
+  {% for a, n in no_dpt %}<tr><td class="mono">{{ a }}</td><td>{{ n or '—' }}</td></tr>{% endfor %}
+</table>
+{% endif %}
+
+<h2>Letzte Importe</h2>
+{% if imports %}
+<table>
+  <tr><th>Zeitpunkt</th><th>Datei</th><th>neu</th><th>geändert</th><th>verschwunden</th></tr>
+  {% for t, f, a, c, v in imports %}
+  <tr><td>{{ t.strftime('%d.%m.%Y %H:%M') }}</td><td class="mono">{{ f }}</td>
+      <td class="mono">{{ a }}</td><td class="mono">{{ c }}</td><td class="mono dim">{{ v }}</td></tr>
+  {% endfor %}
+</table>
+{% else %}<p class="dim">noch keine</p>{% endif %}
+{% endblock %}

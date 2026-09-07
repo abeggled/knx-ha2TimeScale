@@ -1,0 +1,31 @@
+{% extends "base.html" %}{% set nav='ha' %}
+{% block body %}
+<form class="bar" method="get">
+  <input name="q" value="{{ q }}" placeholder="entity_id" style="min-width:300px">
+  <select name="only">
+    <option value="all" {{ 'selected' if only=='all' }}>alle</option>
+    <option value="excluded" {{ 'selected' if only=='excluded' }}>nur ausgeschlossene</option>
+  </select>
+  <button class="act">Suchen</button>
+</form>
+<table>
+  <tr><th>Entity</th><th>Domain</th><th>erstmals</th><th>zuletzt</th><th>Archiv</th></tr>
+  {% for e, dom, arch, fs, ls in rows %}
+  <tr>
+    <td class="mono">{{ e }}</td>
+    <td class="dim">{{ dom }}</td>
+    <td class="dim">{{ fs.strftime('%d.%m. %H:%M') if fs else '—' }}</td>
+    <td class="dim">{{ ls.strftime('%d.%m. %H:%M') if ls else '—' }}</td>
+    <td>
+      <form method="post" action="/ha/toggle" class="inline">
+        <input type="hidden" name="entity_id" value="{{ e }}">
+        <input type="hidden" name="q" value="{{ q }}">
+        <input type="hidden" name="only" value="{{ only }}">
+        <button class="link">{% if arch %}<span class="pill ok">ja</span>{% else %}<span class="pill bad">nein</span>{% endif %}</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+<p class="note">{{ rows|length }} Einträge (max. 500). Entities tragen sich beim ersten Auftreten selbst ein.</p>
+{% endblock %}

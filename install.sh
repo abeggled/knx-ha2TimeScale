@@ -20,9 +20,11 @@ id -u "$USER_NAME" >/dev/null 2>&1 || \
 
 mkdir -p "$DEST"
 install -m 644 -t "$DEST" \
-    db.py registry.py writer.py knx_source.py ha_source.py service.py \
+    db.py registry.py writer.py knx_source.py ha_source.py service.py ui.py \
     compare_dryrun.py import_knxproj.py seed_ga.py seed_units.py \
-    requirements.txt schema.sql schema_ha.sql
+    setup_ui_role.py requirements.txt schema.sql schema_ha.sql schema_status.sql
+mkdir -p "$DEST/templates"
+install -m 644 -t "$DEST/templates" templates/*.html
 
 if [[ ! -x "$DEST/.venv/bin/python" ]]; then
     rm -rf "$DEST/.venv"
@@ -47,6 +49,16 @@ chmod 640 "$ENV_FILE"
 install -m 644 knx-ha2timescale.service /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable knx-ha2timescale.service
+
+# The web UI is optional: enabled only when its environment file exists.
+if [[ -f /etc/knx-ha2timescale-ui.env ]]; then
+    chown root:"$USER_NAME" /etc/knx-ha2timescale-ui.env
+    chmod 640 /etc/knx-ha2timescale-ui.env
+    install -m 644 knx-ha2timescale-ui.service /etc/systemd/system/
+    systemctl daemon-reload
+    systemctl enable knx-ha2timescale-ui.service
+    echo "web UI enabled"
+fi
 
 echo
 echo "installed. Start with:  systemctl start knx-ha2timescale"

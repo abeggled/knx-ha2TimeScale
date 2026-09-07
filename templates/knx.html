@@ -1,0 +1,33 @@
+{% extends "base.html" %}{% set nav='knx' %}
+{% block body %}
+<form class="bar" method="get">
+  <input name="q" value="{{ q }}" placeholder="Adresse oder Name" style="min-width:260px">
+  <select name="only">
+    <option value="all" {{ 'selected' if only=='all' }}>alle</option>
+    <option value="excluded" {{ 'selected' if only=='excluded' }}>nur ausgeschlossene</option>
+    <option value="nodpt" {{ 'selected' if only=='nodpt' }}>ohne DPT</option>
+  </select>
+  <button class="act">Suchen</button>
+</form>
+<table>
+  <tr><th>Adresse</th><th>Name</th><th>DPT</th><th>Herkunft</th><th>zuletzt gesehen</th><th>Archiv</th></tr>
+  {% for a, n, d, arch, o, ls in rows %}
+  <tr>
+    <td class="mono">{{ a }}</td>
+    <td>{{ n or '—' }}</td>
+    <td class="mono {{ 'warn' if not d }}">{{ d or '—' }}</td>
+    <td class="dim">{{ o }}</td>
+    <td class="dim">{{ ls.strftime('%d.%m. %H:%M') if ls else '—' }}</td>
+    <td>
+      <form method="post" action="/knx/toggle" class="inline">
+        <input type="hidden" name="address" value="{{ a }}">
+        <input type="hidden" name="q" value="{{ q }}">
+        <input type="hidden" name="only" value="{{ only }}">
+        <button class="link">{% if arch %}<span class="pill ok">ja</span>{% else %}<span class="pill bad">nein</span>{% endif %}</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+<p class="note">{{ rows|length }} Einträge (max. 500). Klick auf ja/nein schaltet die Archivierung um und setzt die Herkunft auf „manual“ — ein ETS-Import überschreibt solche Einträge nicht.</p>
+{% endblock %}

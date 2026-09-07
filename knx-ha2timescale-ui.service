@@ -1,5 +1,5 @@
 [Unit]
-Description=knx-ha2TimeScale collector (KNX + Home Assistant -> TimescaleDB)
+Description=knx-ha2TimeScale web UI
 Documentation=https://github.com/abeggled/knx-ha2TimeScale
 After=network-online.target
 Wants=network-online.target
@@ -8,15 +8,11 @@ Wants=network-online.target
 Type=simple
 User=collector
 WorkingDirectory=/opt/knx-ha2timescale
-EnvironmentFile=/etc/knx-ha2timescale.env
-ExecStart=/opt/knx-ha2timescale/.venv/bin/python -u service.py
-ExecReload=/bin/kill -HUP $MAINPID
+EnvironmentFile=/etc/knx-ha2timescale-ui.env
+ExecStart=/opt/knx-ha2timescale/.venv/bin/python -u ui.py
 Restart=always
 RestartSec=10
 
-# Hardening — the service needs the network and nothing else.
-# AF_NETLINK/AF_PACKET are required: xknx enumerates local interfaces via
-# ifaddr to pick the source IP for the KNX tunnel.
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict

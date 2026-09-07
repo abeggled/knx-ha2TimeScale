@@ -1,0 +1,65 @@
+{% extends "base.html" %}{% set nav='import' %}
+{% block body %}
+{% if not job %}
+<h2>ETS-Projekt importieren</h2>
+<p class="note">Die Datei wird nur zum Auslesen der Gruppenadressen verwendet und danach gelöscht. Das Parsen dauert einige Minuten. Anschliessend siehst du die Änderungen und entscheidest, ob sie übernommen werden.</p>
+<form method="post" enctype="multipart/form-data" class="bar">
+  <input type="file" name="file" accept=".knxproj" required>
+  <input type="password" name="password" placeholder="Projektpasswort (falls gesetzt)" style="min-width:260px">
+  <button class="act">Hochladen und prüfen</button>
+</form>
+{% else %}
+<h2>{{ job.file }}</h2>
+{% if job.state in ('queued','parsing') %}
+<meta http-equiv="refresh" content="5">
+<p><span class="pill warn">wird gelesen …</span> Die Seite aktualisiert sich alle 5 Sekunden.</p>
+{% elif job.state == 'error' %}
+<p><span class="pill bad">Fehler</span></p>
+<pre class="mono" style="background:#1c1f26;padding:12px;border-radius:6px;white-space:pre-wrap">{{ job.error }}</pre>
+<p class="note">Bei <span class="mono">InvalidPasswordException</span> fehlt das Projektpasswort.</p>
+{% elif job.state == 'applied' %}
+<p><span class="pill ok">übernommen</span> — {{ job.added|length }} neu, {{ job.changed|length }} geändert.</p>
+<p class="note">Der Collector übernimmt die neuen Stammdaten beim nächsten Reload.</p>
+{% else %}
+<div class="cards">
+  <div class="card"><div class="k">neu</div><div class="v">{{ job.added|length }}</div></div>
+  <div class="card"><div class="k">geändert</div><div class="v">{{ job.changed|length }}</div></div>
+  <div class="card"><div class="k">gepinnt, bleibt</div><div class="v">{{ job.pinned|length }}</div></div>
+  <div class="card"><div class="k">nicht im Projekt</div><div class="v dim">{{ job.vanished|length }}</div></div>
+</div>
+{% if job.pinned %}
+<h2>Manuell gepinnt — ETS wird ignoriert</h2>
+<table><tr><th>Adresse</th><th>bleibt</th><th>ETS sagt</th><th>Name</th></tr>
+{% for a, old, new, n in job.pinned %}<tr><td class="mono">{{ a }}</td><td class="mono">{{ old }}</td><td class="mono dim">{{ new }}</td><td>{{ n }}</td></tr>{% endfor %}
+</table>
+{% endif %}
+{% if job.added %}
+<h2>Neu ({{ job.added|length }})</h2>
+<table><tr><th>Adresse</th><th>DPT</th><th>Name</th></tr>
+{% for a, d, n in job.added[:100] %}<tr><td class="mono">{{ a }}</td><td class="mono">{{ d or '—' }}</td><td>{{ n }}</td></tr>{% endfor %}
+</table>
+{% if job.added|length > 100 %}<p class="dim">… und {{ job.added|length - 100 }} weitere</p>{% endif %}
+{% endif %}
+{% if job.changed %}
+<h2>Geändert ({{ job.changed|length }})</h2>
+<table><tr><th>Adresse</th><th>DPT alt → neu</th><th>Name alt → neu</th></tr>
+{% for a, od, nd, on, nn in job.changed[:100] %}
+<tr><td class="mono">{{ a }}</td>
+    <td class="mono">{% if od != nd %}{{ od or '—' }} → {{ nd or '—' }}{% else %}<span class="dim">unverändert</span>{% endif %}</td>
+    <td>{% if on != nn %}<span class="dim">{{ on }}</span> → {{ nn }}{% else %}<span class="dim">unverändert</span>{% endif %}</td></tr>
+{% endfor %}
+</table>
+{% endif %}
+{% if job.vanished %}
+<h2>Im Archiv, nicht im Projekt ({{ job.vanished|length }})</h2>
+<p class="note">Diese Adressen bleiben erhalten — die Historie verweist auf sie. Sie werden weder gelöscht noch verändert.</p>
+<p class="mono dim">{{ job.vanished|join(', ') }}</p>
+{% endif %}
+<form method="post" action="/import/apply" style="margin-top:20px">
+  <input type="hidden" name="job_id" value="{{ job_id }}">
+  <button class="act">Übernehmen</button>
+  <a href="/import" style="margin-left:12px;color:var(--dim)">verwerfen</a>
+</form>
+{% endif %}
+{% endif %}
+{% endblock %}
