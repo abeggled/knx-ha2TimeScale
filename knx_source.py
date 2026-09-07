@@ -10,11 +10,12 @@ import asyncio
 import datetime as dt
 import enum
 import logging
+import os
 import struct
 
 from xknx import XKNX
 from xknx.dpt import DPTArray, DPTBase, DPTBinary
-from xknx.io import ConnectionConfig, ConnectionType
+from xknx.io import ConnectionConfig, ConnectionType, SecureConfig
 from xknx.telegram import Telegram
 from xknx.telegram.apci import GroupValueResponse, GroupValueWrite
 
@@ -143,9 +144,52 @@ class KNXSource:
         s = self.registry.settings
         mode = (s.get("knx.connection") or "tunnel").lower()
         own = s.get("knx.individual_address") or None
+
+        if mode in ("tunnel_secure", "routing_secure"):
+            # Keys come from the ETS keyring export. Its password is a secret
+            # and therefore lives in the environment, not in settings.
+            keyfile = s.get("knx.keyring_path") or None
+            keypass = os.environ.get(s.get("knx.keyring_password_env")
+                                     or "KNX_KEYRING_PASSWORD")
+            if not keyfile:
+                raise RuntimeError("setting knx.keyring_path is empty")
+            if not keypass:
+                raise RuntimeError(
+                    "keyring password missing — set the environment variable "
+                    f"{s.get('knx.keyring_password_env') or 'KNX_KEYRING_PASSWORD'}"
+                )
+            secure = SecureConfig(
+                knxkeys_file_path=keyfile,
+                knxkeys_password=keypass,
+                user_id=int(s["knx.secure_user_id"])
+                if s.get("knx.secure_user_id") else None,
+            )
+            if mode == "routing_secure":
+                return ConnectionConfig(
+                    connection_type=ConnectionType.ROUTING_SECURE,
+                    individual_address=own,
+                    secure_config=secure,
+                )
+            return ConnectionConfig(
+                connection_type=ConnectionType.TUNNELING_TCP_SECURE,
+                gateway_ip=s.get("knx.gateway_host"),
+                gateway_port=int(s.get("knx.gateway_port") or 3671),
+                individual_address=own,
+                secure_config=secure,
+                auto_reconnect=True,
+            )
+
         if mode == "routing":
             return ConnectionConfig(
                 connection_type=ConnectionType.ROUTING, individual_address=own
+            )
+        if mode == "tunnel_tcp":
+            return ConnectionConfig(
+                connection_type=ConnectionType.TUNNELING_TCP,
+                gateway_ip=s.get("knx.gateway_host"),
+                gateway_port=int(s.get("knx.gateway_port") or 3671),
+                individual_address=own,
+                auto_reconnect=True,
             )
         return ConnectionConfig(
             connection_type=ConnectionType.TUNNELING,

@@ -66,10 +66,15 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 
 INSERT INTO settings (key, value, note) VALUES
-    ('knx.connection',      'tunnel',        'tunnel | routing'),
+    ('knx.connection',      'tunnel',
+        'tunnel | tunnel_tcp | tunnel_secure | routing | routing_secure'),
     ('knx.gateway_host',    '',              'KNXnet/IP gateway IP (tunnel mode)'),
     ('knx.gateway_port',    '3671',          NULL),
     ('knx.individual_address', '',           'own address on the bus, e.g. 1.1.250'),
+    ('knx.keyring_path',    '',              'path to the .knxkeys export from ETS'),
+    ('knx.keyring_password_env', 'KNX_KEYRING_PASSWORD',
+        'name of the env var holding the keyring password'),
+    ('knx.secure_user_id',  '',              'tunnel user from the keyring; empty = automatic'),
     ('ha.websocket_url',    '',              'ws://host:8123/api/websocket'),
     ('ha.token_env',        'HA_TOKEN',      'name of the env var holding the token'),
     ('batch.max_rows',      '500',           'flush after N rows'),
