@@ -24,11 +24,11 @@
 <div class="cards">
   <div class="card"><div class="k">neu</div><div class="v">{{ job.added|length }}</div></div>
   <div class="card"><div class="k">geändert</div><div class="v">{{ job.changed|length }}</div></div>
-  <div class="card"><div class="k">gepinnt, bleibt</div><div class="v">{{ job.pinned|length }}</div></div>
+  <div class="card"><div class="k">geschützt, bleibt</div><div class="v">{{ job.pinned|length }}</div></div>
   <div class="card"><div class="k">nicht im Projekt</div><div class="v dim">{{ job.vanished|length }}</div></div>
 </div>
 {% if job.pinned %}
-<h2>Manuell gepinnt — ETS wird ignoriert</h2>
+<h2>Geschützt — ETS wird ignoriert</h2>
 <table><tr><th>Adresse</th><th>bleibt</th><th>ETS sagt</th><th>Name</th></tr>
 {% for a, old, new, n in job.pinned %}<tr><td class="mono">{{ a }}</td><td class="mono">{{ old }}</td><td class="mono dim">{{ new }}</td><td>{{ n }}</td></tr>{% endfor %}
 </table>

@@ -6,16 +6,25 @@
     <option value="all" {{ 'selected' if only=='all' }}>alle</option>
     <option value="excluded" {{ 'selected' if only=='excluded' }}>nur ausgeschlossene</option>
     <option value="nodpt" {{ 'selected' if only=='nodpt' }}>ohne DPT</option>
+    <option value="locked" {{ 'selected' if only=='locked' }}>nur geschützte</option>
   </select>
   <button class="act">Suchen</button>
 </form>
 <table>
-  <tr><th>Adresse</th><th>Name</th><th>DPT</th><th>Herkunft</th><th>zuletzt gesehen</th><th>Archiv</th></tr>
-  {% for a, n, d, arch, o, ls in rows %}
+  <tr><th>Adresse</th><th>Name</th><th>DPT</th><th>geschützt</th><th>Herkunft</th><th>zuletzt gesehen</th><th>Archiv</th></tr>
+  {% for a, n, d, arch, o, ls, lock in rows %}
   <tr>
     <td class="mono">{{ a }}</td>
     <td>{{ n or '—' }}</td>
     <td class="mono {{ 'warn' if not d }}">{{ d or '—' }}</td>
+    <td>
+      <form method="post" action="/knx/lock" class="inline">
+        <input type="hidden" name="address" value="{{ a }}">
+        <input type="hidden" name="q" value="{{ q }}">
+        <input type="hidden" name="only" value="{{ only }}">
+        <button class="link" title="Schützt Name und DPT vor dem nächsten ETS-Import">{% if lock %}<span class="pill warn">geschützt</span>{% else %}<span class="dim">frei</span>{% endif %}</button>
+      </form>
+    </td>
     <td class="dim">{{ o }}</td>
     <td class="dim">{{ ls.strftime('%d.%m. %H:%M') if ls else '—' }}</td>
     <td>
@@ -29,5 +38,8 @@
   </tr>
   {% endfor %}
 </table>
-<p class="note">{{ rows|length }} Einträge (max. 500). Klick auf ja/nein schaltet die Archivierung um und setzt die Herkunft auf „manual“ — ein ETS-Import überschreibt solche Einträge nicht.</p>
+<p class="note">{{ rows|length }} Einträge (max. 500).
+<b>Archiv</b> steuert, ob Telegramme dieser Adresse gespeichert werden.
+<b>Geschützt</b> friert Name und DPT ein — ein ETS-Import meldet die Abweichung dann nur, statt sie zu überschreiben. Die beiden sind unabhängig voneinander.
+<b>Herkunft</b> zeigt, woher Name und DPT stammen, und wird nie von Hand gesetzt.</p>
 {% endblock %}

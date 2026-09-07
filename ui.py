@@ -126,8 +126,10 @@ def knx_list(request: Request, q: str = "", only: str = "all",
         where.append("NOT archive")
     elif only == "nodpt":
         where.append("dpt IS NULL")
+    elif only == "locked":
+        where.append("locked")
     rows = query(db.KNX_DSN,
-                 "SELECT address, name, dpt, archive, origin, last_seen"
+                 "SELECT address, name, dpt, archive, origin, last_seen, locked"
                  f" FROM knx_ga WHERE {' AND '.join(where)}"
                  " ORDER BY string_to_array(address, '/')::int[] LIMIT 500",
                  tuple(args))
@@ -138,8 +140,18 @@ def knx_list(request: Request, q: str = "", only: str = "all",
 def knx_toggle(address: str = Form(...), q: str = Form(""),
                only: str = Form("all"), _: str = Depends(auth)):
     execute(db.KNX_DSN,
-            "UPDATE knx_ga SET archive = NOT archive, origin = 'manual',"
-            " updated_at = now() WHERE address = %s", (address,))
+            "UPDATE knx_ga SET archive = NOT archive, updated_at = now()"
+            " WHERE address = %s", (address,))
+    return RedirectResponse(f"/knx?q={q}&only={only}", status_code=303)
+
+
+@app.post("/knx/lock")
+def knx_lock(address: str = Form(...), q: str = Form(""),
+             only: str = Form("all"), _: str = Depends(auth)):
+    """Protect name and DPT against the next .knxproj import, or release it."""
+    execute(db.KNX_DSN,
+            "UPDATE knx_ga SET locked = NOT locked, updated_at = now()"
+            " WHERE address = %s", (address,))
     return RedirectResponse(f"/knx?q={q}&only={only}", status_code=303)
 
 
@@ -225,15 +237,15 @@ def run_import(job_id: str, path: str, password: str | None) -> None:
         job["project"] = project
         with psycopg.connect(db.KNX_DSN) as conn:
             cur = conn.cursor()
-            cur.execute("SELECT address, name, dpt, origin FROM knx_ga")
-            existing = {r[0]: {"name": r[1], "dpt": r[2], "origin": r[3]}
+            cur.execute("SELECT address, name, dpt, locked FROM knx_ga")
+            existing = {r[0]: {"name": r[1], "dpt": r[2], "locked": r[3]}
                         for r in cur.fetchall()}
         added, changed, pinned = [], [], []
         for addr, new in project.items():
             old = existing.get(addr)
             if old is None:
                 added.append((addr, new["dpt"], new["name"]))
-            elif old["origin"] == "manual":
+            elif old["locked"]:
                 if old["name"] != new["name"] or old["dpt"] != new["dpt"]:
                     pinned.append((addr, old["dpt"], new["dpt"], old["name"]))
             elif old["name"] != new["name"] or old["dpt"] != new["dpt"]:
@@ -282,7 +294,7 @@ def import_apply(job_id: str = Form(...), _: str = Depends(auth)):
                    name = excluded.name, dpt = excluded.dpt,
                    description = excluded.description, origin = 'ets',
                    updated_at = now()
-               WHERE knx_ga.origin <> 'manual'""",
+               WHERE NOT knx_ga.locked""",
             [(a, g["name"], g["dpt"], g["description"])
              for a, g in project.items()],
         )

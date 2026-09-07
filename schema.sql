@@ -11,7 +11,8 @@ CREATE TABLE IF NOT EXISTS knx_ga (
     description text,
     archive     boolean     NOT NULL DEFAULT true,
     origin      text        NOT NULL DEFAULT 'auto'
-                CHECK (origin IN ('ets', 'seed', 'auto', 'manual')),
+                CHECK (origin IN ('ets', 'seed', 'auto')),
+    locked      boolean     NOT NULL DEFAULT false,
     note        text,                           -- why a value was pinned/excluded
     first_seen  timestamptz NOT NULL DEFAULT now(),
     last_seen   timestamptz,
@@ -19,11 +20,15 @@ CREATE TABLE IF NOT EXISTS knx_ga (
 );
 
 ALTER TABLE knx_ga ADD COLUMN IF NOT EXISTS note text;
+ALTER TABLE knx_ga ADD COLUMN IF NOT EXISTS locked boolean NOT NULL DEFAULT false;
 
 COMMENT ON COLUMN knx_ga.origin IS
-    'ets = from .knxproj import | seed = derived from historic measurements | '
-    'auto = first seen on the bus | manual = pinned by hand, never overwritten '
-    'by an import';
+    'ets = from a .knxproj import | seed = derived from historic measurements '
+    '| auto = first seen on the bus. Never set by hand.';
+
+COMMENT ON COLUMN knx_ga.locked IS
+    'true = name and DPT are kept; an import reports the difference but does '
+    'not overwrite. Independent of the archive flag.';
 
 -- ── Home Assistant entity inventory ───────────────────────────────────────
 -- Auto-populated on first sighting; excluding an entity is a flag, not a rule.
