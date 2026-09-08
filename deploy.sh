@@ -28,9 +28,15 @@ $SSH "$TARGET" "cd '$REMOTE/templates' && for f in *.html; do
     case \" $KEEP \" in *\" \$f \"*) ;; *) rm -f \"\$f\"; echo \"entfernt: \$f\";; esac
 done"
 
-echo "synced to $TARGET:$REMOTE"
+# Print the absolute path: as root, ~ is /root, not the deploy user's home.
+ABS=$($SSH "$TARGET" "cd '$REMOTE' && pwd")
+
+echo "synced to $TARGET:$ABS"
 echo
 echo "On the target, as root:"
-echo "  cd ~/$REMOTE && ./install.sh"
+echo "  cd $ABS && ./install.sh"
 echo "  systemctl daemon-reload"
 echo "  systemctl restart homearchive homearchive-ui"
+echo
+echo "or in one line:"
+echo "  sudo sh -c 'cd $ABS && ./install.sh && systemctl daemon-reload && systemctl restart homearchive homearchive-ui'"
