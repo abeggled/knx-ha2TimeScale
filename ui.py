@@ -539,15 +539,18 @@ def mqtt_topic_add(topic: str = Form(...), target_db: str = Form(...),
                    note: str = Form(""), _: str = Depends(auth)):
     if target_db not in TARGET_DBS:
         raise HTTPException(400, "unknown target database")
-    execute(db.KNX_DSN,
-            "INSERT INTO mqtt_topic (topic, target_db, target_table,"
-            " time_path, note) VALUES (%s,%s,%s,%s,%s)"
-            " ON CONFLICT (topic) DO UPDATE SET target_db=excluded.target_db,"
-            " target_table=excluded.target_table, time_path=excluded.time_path,"
-            " note=excluded.note",
-            (topic.strip(), target_db, target_table.strip(),
-             time_path.strip() or None, note or None))
-    return RedirectResponse("/mqtt?saved=topic", status_code=303)
+    rows = query(db.KNX_DSN,
+                 "INSERT INTO mqtt_topic (topic, target_db, target_table,"
+                 " time_path, note) VALUES (%s,%s,%s,%s,%s)"
+                 " ON CONFLICT (topic) DO UPDATE SET target_db=excluded.target_db,"
+                 " target_table=excluded.target_table,"
+                 " time_path=excluded.time_path, note=excluded.note"
+                 " RETURNING id",
+                 (topic.strip(), target_db, target_table.strip(),
+                  time_path.strip() or None, note or None))
+    # Straight into the mapping — that is the next step, and hiding it behind
+    # a second click made it undiscoverable.
+    return RedirectResponse(f"/mqtt/map?topic_id={rows[0][0]}", status_code=303)
 
 
 @app.post("/mqtt/topic/delete")

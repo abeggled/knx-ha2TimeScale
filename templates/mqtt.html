@@ -44,7 +44,10 @@
   </tr>
   {% endfor %}
 </table>
-{% else %}<p class="dim">Noch kein Topic angelegt.</p>{% endif %}
+{% else %}
+<p class="dim">Noch kein Topic angelegt.</p>
+<p class="note"><b>So geht es weiter:</b> unten ein Topic anlegen — danach landest du direkt auf der Zuordnungsseite. Dort fügst du ein Beispieltelegramm ein (oder wartest auf das erste vom Broker) und verbindest jeden JSON-Pfad mit einer Spalte der Zieltabelle. Ohne Zuordnung wird nichts gespeichert.</p>
+{% endif %}
 
 <h2>Topic hinzufügen</h2>
 <p class="note">Platzhalter erlaubt: <span class="mono">+</span> für eine Ebene, <span class="mono">#</span> für den Rest. Für Tasmota typischerweise <span class="mono">tele/&lt;gerät&gt;/SENSOR</span>. Das Zeitfeld ist der Pfad im Telegramm, etwa <span class="mono">Time</span> — leer bedeutet, dass die Empfangszeit verwendet wird.</p>

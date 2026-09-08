@@ -49,8 +49,22 @@
   {% endfor %}
 </table>
 {% else %}
-<p class="dim">Für dieses Topic ist noch kein Telegramm eingetroffen.</p>
+<p class="dim">Für dieses Topic ist noch kein Telegramm eingetroffen. Füge unten eines ein oder trage die Felder von Hand ein.</p>
 {% endif %}
+
+<h2>Feld hinzufügen</h2>
+<p class="note">Geht auch ohne Telegramm: Spalte wählen, Pfad eintippen, fertig. Ist eine Vorlage vorhanden, schlägt das Pfadfeld die erkannten Pfade vor.</p>
+<form method="post" action="/mqtt/map/add" class="bar">
+  <input type="hidden" name="topic_id" value="{{ tid }}">
+  <select name="column_name" required style="min-width:220px">
+    <option value="">— Spalte wählen —</option>
+    {% for col in columns %}<option value="{{ col }}" {{ 'disabled' if col in used }}>{{ col }}{{ ' (belegt)' if col in used }}</option>{% endfor %}
+  </select>
+  <input name="json_path" list="pfade" placeholder="z.B. z.Po" class="mono" style="min-width:200px" required>
+  <datalist id="pfade">{% for path, value in leaves %}<option value="{{ path }}">{{ value }}</option>{% endfor %}</datalist>
+  <input name="scale" value="1" class="mono" style="width:90px" title="Faktor">
+  <button class="act">Hinzufügen</button>
+</form>
 
 <h2>Telegramm von Hand einfügen</h2>
 <p class="note">Damit lässt sich die Zuordnung aufbauen, bevor der Broker verbunden ist. Ein empfangenes Telegramm überschreibt die Vorlage später automatisch.</p>
