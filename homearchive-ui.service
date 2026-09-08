@@ -1,18 +1,18 @@
 [Unit]
-Description=knx-ha2TimeScale web UI
-Documentation=https://github.com/abeggled/knx-ha2TimeScale
+Description=homearchive web UI
+Documentation=https://github.com/abeggled/homearchive
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 User=collector
-WorkingDirectory=/opt/knx-ha2timescale
-# /var/lib/knx-ha2timescale — holds the KNX Secure keyring, written by the UI
-StateDirectory=knx-ha2timescale
+WorkingDirectory=/opt/homearchive
+# /var/lib/homearchive — holds the KNX Secure keyring, written by the UI
+StateDirectory=homearchive
 StateDirectoryMode=0750
-EnvironmentFile=/etc/knx-ha2timescale-ui.env
-ExecStart=/opt/knx-ha2timescale/.venv/bin/python -u ui.py
+EnvironmentFile=/etc/homearchive-ui.env
+ExecStart=/opt/homearchive/.venv/bin/python -u ui.py
 Restart=always
 RestartSec=10
 

@@ -2,7 +2,7 @@
 {% block body %}
 <h2>KNX-Verbindung</h2>
 
-{% if saved == 'ok' %}<p><span class="pill ok">gespeichert</span> Wirksam erst nach <span class="mono">systemctl restart knx-ha2timescale</span> — die Verbindung wird nur beim Start aufgebaut.</p>{% endif %}
+{% if saved == 'ok' %}<p><span class="pill ok">gespeichert</span> Wirksam erst nach <span class="mono">systemctl restart homearchive</span> — die Verbindung wird nur beim Start aufgebaut.</p>{% endif %}
 {% if saved == 'keyring' %}<p><span class="pill ok">Keyring gespeichert</span> Wähle unten den Tunnel und stelle den Modus um.</p>{% endif %}
 {% if saved == 'invalid' %}<p><span class="pill bad">nicht gespeichert</span> Die Datei liess sich mit diesem Passwort nicht öffnen — der bisherige Keyring bleibt unverändert.</p>{% endif %}
 {% if error %}<p><span class="pill bad">Keyring nicht lesbar</span> <span class="mono">{{ error }}</span></p>{% endif %}
@@ -65,7 +65,7 @@
 </form>
 
 <h2>Keyring {{ 'ersetzen' if st.present else 'hochladen' }}</h2>
-<p class="note">Export aus ETS: <i>Berichte → Projekt-Sicherheit → Keyring exportieren</i>. Die Datei wird vor dem Ablegen mit dem Passwort geöffnet; schlägt das fehl, bleibt der bisherige Stand erhalten. Passwort und Schlüssel landen in <span class="mono">/var/lib/knx-ha2timescale</span> mit 0600.</p>
+<p class="note">Export aus ETS: <i>Berichte → Projekt-Sicherheit → Keyring exportieren</i>. Die Datei wird vor dem Ablegen mit dem Passwort geöffnet; schlägt das fehl, bleibt der bisherige Stand erhalten. Passwort und Schlüssel landen in <span class="mono">/var/lib/homearchive</span> mit 0600.</p>
 <form method="post" action="/knx/connection/keyring" enctype="multipart/form-data" class="bar">
   <input type="file" name="file" accept=".knxkeys" required>
   <input type="password" name="password" placeholder="Keyring-Passwort" style="min-width:240px" required>

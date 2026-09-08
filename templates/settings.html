@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% set nav='settings' %}
 {% block body %}
 <h2>Einstellungen</h2>
-<p class="note">Änderungen greifen beim nächsten Reload der Registry (alle 10 Minuten) oder sofort mit <span class="mono">systemctl reload knx-ha2timescale</span>. Verbindungsparameter für KNX werden erst bei einem Neustart des Dienstes übernommen.</p>
+<p class="note">Änderungen greifen beim nächsten Reload der Registry (alle 10 Minuten) oder sofort mit <span class="mono">systemctl reload homearchive</span>. Verbindungsparameter für KNX werden erst bei einem Neustart des Dienstes übernommen.</p>
 <form method="post" action="/settings/save">
 <table>
   <tr><th>Schlüssel</th><th>Wert</th><th>Beschreibung</th></tr>
@@ -15,5 +15,5 @@
 </table>
 <p><button class="act" style="margin-top:12px">Speichern</button></p>
 </form>
-<p class="note">Zugangsdaten stehen bewusst nicht hier, sondern in <span class="mono">/etc/knx-ha2timescale.env</span>.</p>
+<p class="note">Zugangsdaten stehen bewusst nicht hier, sondern in <span class="mono">/etc/homearchive.env</span>.</p>
 {% endblock %}

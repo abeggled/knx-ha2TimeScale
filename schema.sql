@@ -1,4 +1,4 @@
--- knx-ha2TimeScale — configuration and metadata schema.
+-- homearchive — configuration and metadata schema.
 -- Applied to the knx_data database (KNX side) and ha_data (HA side).
 -- Idempotent: safe to re-run.
 

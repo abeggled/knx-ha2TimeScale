@@ -1,18 +1,18 @@
 [Unit]
-Description=knx-ha2TimeScale collector (KNX + Home Assistant -> TimescaleDB)
-Documentation=https://github.com/abeggled/knx-ha2TimeScale
+Description=homearchive collector (KNX + Home Assistant -> TimescaleDB)
+Documentation=https://github.com/abeggled/homearchive
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 User=collector
-WorkingDirectory=/opt/knx-ha2timescale
-# /var/lib/knx-ha2timescale — holds the KNX Secure keyring, written by the UI
-StateDirectory=knx-ha2timescale
+WorkingDirectory=/opt/homearchive
+# /var/lib/homearchive — holds the KNX Secure keyring, written by the UI
+StateDirectory=homearchive
 StateDirectoryMode=0750
-EnvironmentFile=/etc/knx-ha2timescale.env
-ExecStart=/opt/knx-ha2timescale/.venv/bin/python -u service.py
+EnvironmentFile=/etc/homearchive.env
+ExecStart=/opt/homearchive/.venv/bin/python -u service.py
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=always
 RestartSec=10

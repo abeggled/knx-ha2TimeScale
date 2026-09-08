@@ -8,7 +8,7 @@
 set -euo pipefail
 
 TARGET=${1:?usage: deploy.sh user@host [remote-dir]}
-REMOTE=${2:-knx-ha2timescale}
+REMOTE=${2:-homearchive}
 KEY=${DEPLOY_KEY:-$HOME/.ssh/id_ed25519_knxmig}
 SSH="ssh -i $KEY -o BatchMode=yes"
 
@@ -33,4 +33,4 @@ echo
 echo "On the target, as root:"
 echo "  cd ~/$REMOTE && ./install.sh"
 echo "  systemctl daemon-reload"
-echo "  systemctl restart knx-ha2timescale knx-ha2timescale-ui"
+echo "  systemctl restart homearchive homearchive-ui"

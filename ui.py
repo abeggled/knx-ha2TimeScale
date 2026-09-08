@@ -1,4 +1,4 @@
-"""knx-ha2TimeScale — web UI.
+"""homearchive — web UI.
 
 Runs as its own service next to the collector and talks to the same two
 databases. Restarting it never interrupts data collection; the collector's
@@ -36,7 +36,7 @@ import db
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=os.path.join(BASE, "templates"))
-app = FastAPI(title="knx-ha2TimeScale")
+app = FastAPI(title="homearchive")
 security = HTTPBasic()
 
 # In-process state of running .knxproj imports (parsing takes minutes).

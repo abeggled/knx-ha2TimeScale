@@ -10,7 +10,7 @@ import os
 import pathlib
 
 STATE_DIR = pathlib.Path(
-    os.environ.get("STATE_DIRECTORY", "/var/lib/knx-ha2timescale").split(":")[0]
+    os.environ.get("STATE_DIRECTORY", "/var/lib/homearchive").split(":")[0]
 )
 KEYRING_FILE = STATE_DIR / "keyring.knxkeys"
 PASSWORD_FILE = STATE_DIR / "keyring.pass"

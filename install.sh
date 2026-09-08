@@ -4,13 +4,13 @@
 #   sudo ./install.sh
 #
 # Expects the working copy in the current directory and an environment file
-# at /etc/knx-ha2timescale.env (see .env.example). Creates a dedicated
+# at /etc/homearchive.env (see .env.example). Creates a dedicated
 # service user without a login shell.
 set -euo pipefail
 
-DEST=/opt/knx-ha2timescale
+DEST=/opt/homearchive
 USER_NAME=collector
-ENV_FILE=/etc/knx-ha2timescale.env
+ENV_FILE=/etc/homearchive.env
 
 [[ $EUID -eq 0 ]] || { echo "run as root"; exit 1; }
 [[ -f "$ENV_FILE" ]] || { echo "missing $ENV_FILE — see .env.example"; exit 1; }
@@ -47,37 +47,37 @@ chown -R "$USER_NAME:$USER_NAME" "$DEST"
 chown root:"$USER_NAME" "$ENV_FILE"
 chmod 640 "$ENV_FILE"
 
-install -m 644 knx-ha2timescale.service /etc/systemd/system/
+install -m 644 homearchive.service /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable knx-ha2timescale.service
+systemctl enable homearchive.service
 
 # The web UI is optional: enabled only when its environment file exists.
 UI_ENABLED=false
-if [[ -f /etc/knx-ha2timescale-ui.env ]]; then
-    chown root:"$USER_NAME" /etc/knx-ha2timescale-ui.env
-    chmod 640 /etc/knx-ha2timescale-ui.env
-    install -m 644 knx-ha2timescale-ui.service /etc/systemd/system/
+if [[ -f /etc/homearchive-ui.env ]]; then
+    chown root:"$USER_NAME" /etc/homearchive-ui.env
+    chmod 640 /etc/homearchive-ui.env
+    install -m 644 homearchive-ui.service /etc/systemd/system/
     systemctl daemon-reload
-    systemctl enable knx-ha2timescale-ui.service
+    systemctl enable homearchive-ui.service
     UI_ENABLED=true
 fi
 
 echo
 echo "installed."
 echo
-echo "  collector   systemctl start knx-ha2timescale"
-echo "              journalctl -u knx-ha2timescale -f"
+echo "  collector   systemctl start homearchive"
+echo "              journalctl -u homearchive -f"
 if $UI_ENABLED; then
-    UI_PORT=$(sed -n 's/^UI_PORT="\?\([0-9]*\)"\?/\1/p' /etc/knx-ha2timescale-ui.env)
+    UI_PORT=$(sed -n 's/^UI_PORT="\?\([0-9]*\)"\?/\1/p' /etc/homearchive-ui.env)
     echo
-    echo "  web UI      systemctl start knx-ha2timescale-ui"
-    echo "              journalctl -u knx-ha2timescale-ui -f"
+    echo "  web UI      systemctl start homearchive-ui"
+    echo "              journalctl -u homearchive-ui -f"
     echo "              http://$(hostname -f):${UI_PORT:-8080}"
 else
     echo
-    echo "  web UI      not enabled — create /etc/knx-ha2timescale-ui.env"
+    echo "  web UI      not enabled — create /etc/homearchive-ui.env"
     echo "              (see setup_ui_role.py) and run this script again"
 fi
 echo
 echo "Both services are already running? Restart them to pick up the changes:"
-echo "  systemctl restart knx-ha2timescale${UI_ENABLED:+ knx-ha2timescale-ui}"
+echo "  systemctl restart homearchive${UI_ENABLED:+ homearchive-ui}"

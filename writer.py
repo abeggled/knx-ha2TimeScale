@@ -16,7 +16,7 @@ import pathlib
 import psycopg
 
 SPOOL_DIR = pathlib.Path(
-    os.environ.get("STATE_DIRECTORY", "/var/lib/knx-ha2timescale").split(":")[0]
+    os.environ.get("STATE_DIRECTORY", "/var/lib/homearchive").split(":")[0]
 )
 SPOOL_FILE = SPOOL_DIR / "dropped.jsonl"
 SPOOL_MAX_BYTES = 2 * 1024 * 1024

@@ -64,5 +64,5 @@ Platzhalter ist das Prozentzeichen: <span class="mono">%</span> steht für belie
 </table>
 
 <p class="note">„Trifft nichts“ heisst: im Inventar steht derzeit kein passender Eintrag. Bei KNX ist das fast immer ein Tippfehler, weil alle Gruppenadressen aus ETS bekannt sind. Bei Home Assistant kann es auch bedeuten, dass die Entity seit dem letzten Neustart nicht gesendet hat — das Inventar füllt sich erst im Betrieb.</p>
-<p class="note">Ein neues Muster wirkt, sobald der Collector die Registry neu liest — spätestens nach zehn Minuten, sofort mit <span class="mono">systemctl reload knx-ha2timescale</span>. Bereits archivierte Werte bleiben erhalten.</p>
+<p class="note">Ein neues Muster wirkt, sobald der Collector die Registry neu liest — spätestens nach zehn Minuten, sofort mit <span class="mono">systemctl reload homearchive</span>. Bereits archivierte Werte bleiben erhalten.</p>
 {% endblock %}

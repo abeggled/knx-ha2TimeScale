@@ -1,4 +1,4 @@
-"""knx-ha2TimeScale — collector service.
+"""homearchive — collector service.
 
 Replaces the Node-RED flow: KNX telegrams into knx_data.knx_measurements and
 Home Assistant state changes into ha_data.ha_measurements.
