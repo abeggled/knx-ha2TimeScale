@@ -1,0 +1,6 @@
+<div class="bar" style="border-bottom:1px solid var(--line);padding-bottom:0;margin-bottom:18px;gap:0">
+  {% for key, label in [('general','Allgemein'), ('knx','KNX'), ('mqtt','MQTT'), ('import','ETS-Import')] %}
+  <a href="{{ '/settings' if key=='general' else ('/import' if key=='import' else '/settings/' ~ key) }}"
+     style="padding:8px 16px;text-decoration:none;border-bottom:2px solid {{ 'var(--acc)' if tab==key else 'transparent' }};color:{{ 'var(--fg)' if tab==key else 'var(--dim)' }}">{{ label }}</a>
+  {% endfor %}
+</div>

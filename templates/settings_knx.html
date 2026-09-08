@@ -1,5 +1,7 @@
-{% extends "base.html" %}{% set nav='connection' %}
+{% extends "base.html" %}{% set nav='settings' %}
 {% block body %}
+{% set tab = 'knx' %}
+{% include '_settings_tabs.html' %}
 <h2>KNX-Verbindung</h2>
 
 {% if saved == 'ok' %}<p><span class="pill ok">gespeichert</span> Wirksam erst nach <span class="mono">systemctl restart homearchive</span> — die Verbindung wird nur beim Start aufgebaut.</p>{% endif %}

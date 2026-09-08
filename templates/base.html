@@ -42,11 +42,9 @@ form.inline{display:inline}
   <a href="/" class="{{ 'on' if nav=='status' }}">Status</a>
   <a href="/knx" class="{{ 'on' if nav=='knx' }}">KNX</a>
   <a href="/ha" class="{{ 'on' if nav=='ha' }}">Home Assistant</a>
+  <a href="/mqtt" class="{{ 'on' if nav=='mqtt' }}">MQTT</a>
   <a href="/exclusions" class="{{ 'on' if nav=='exclusions' }}">Ausschlüsse</a>
   <a href="/messages" class="{{ 'on' if nav=='messages' }}">Meldungen</a>
-  <a href="/import" class="{{ 'on' if nav=='import' }}">Import</a>
-  <a href="/knx/connection" class="{{ 'on' if nav=='connection' }}">Verbindung</a>
-  <a href="/mqtt" class="{{ 'on' if nav=='mqtt' }}">MQTT</a>
   <a href="/settings" class="{{ 'on' if nav=='settings' }}">Einstellungen</a>
 </header>
 <main>{% block body %}{% endblock %}</main>

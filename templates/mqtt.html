@@ -1,78 +1,46 @@
 {% extends "base.html" %}{% set nav='mqtt' %}
 {% block body %}
-{% if saved == 'broker' %}<p><span class="pill ok">Broker gespeichert</span> Wirksam nach <span class="mono">systemctl restart homearchive</span>.</p>{% endif %}
-{% if saved == 'topic' %}<p><span class="pill ok">Topic gespeichert</span> Ordne unten die Felder zu.</p>{% endif %}
-
-<h2>Broker</h2>
-<form method="post" action="/mqtt/broker">
-<table>
-  <tr><th style="width:200px">Aktiv</th><td><label><input type="checkbox" name="enabled" {{ 'checked' if cfg.get('mqtt.enabled')=='true' }}> MQTT-Quelle einschalten</label></td></tr>
-  <tr><th>Adresse</th><td><input name="host" value="{{ cfg.get('mqtt.host') or '' }}" class="mono" style="width:240px"></td></tr>
-  <tr><th>Port</th><td><input name="port" value="{{ cfg.get('mqtt.port') or '1883' }}" class="mono" style="width:90px">
-      <span class="dim" style="margin-left:8px">ohne TLS 1883, mit TLS meist 8883</span></td></tr>
-  <tr><th>Benutzer</th><td><input name="username" value="{{ cfg.get('mqtt.username') or '' }}" class="mono" style="width:200px" placeholder="leer = anonym"></td></tr>
-  <tr><th>Passwort</th><td><input type="password" name="password" style="width:200px" placeholder="{{ 'hinterlegt — leer lassen zum Beibehalten' if password_stored else 'optional' }}">
-      {% if password_stored %}<span class="pill ok" style="margin-left:8px">hinterlegt</span>{% endif %}</td></tr>
-  <tr><th>TLS</th><td>
-      <label><input type="checkbox" name="tls" {{ 'checked' if cfg.get('mqtt.tls')=='true' }}> verschlüsselt verbinden</label>
-      <label style="margin-left:20px"><input type="checkbox" name="tls_insecure" {{ 'checked' if cfg.get('mqtt.tls_insecure')=='true' }}> Zertifikat nicht prüfen</label>
-      <div class="dim">Ohne Prüfung ist die Verbindung zwar verschlüsselt, aber gegen einen untergeschobenen Broker nicht geschützt — nur für Tests.</div></td></tr>
-  <tr><th>CA-Zertifikat</th><td><input name="ca_cert" value="{{ cfg.get('mqtt.ca_cert') or '' }}" class="mono" style="width:340px" placeholder="Pfad, optional"></td></tr>
-  <tr><th>Client-ID</th><td><input name="client_id" value="{{ cfg.get('mqtt.client_id') or 'homearchive' }}" class="mono" style="width:200px"></td></tr>
-  <tr><th>QoS</th><td><select name="qos">{% for q in ['0','1','2'] %}<option value="{{ q }}" {{ 'selected' if cfg.get('mqtt.qos')==q }}>{{ q }}</option>{% endfor %}</select></td></tr>
-</table>
-<p><button class="act" style="margin-top:12px">Speichern</button></p>
+<form class="bar" method="get">
+  <input name="q" value="{{ q }}" placeholder="Topic" class="mono" style="min-width:280px">
+  <select name="only">
+    <option value="all" {{ 'selected' if only=='all' }}>alle</option>
+    <option value="matched" {{ 'selected' if only=='matched' }}>nur konfigurierte</option>
+    <option value="unmatched" {{ 'selected' if only=='unmatched' }}>nur unkonfigurierte</option>
+  </select>
+  <button class="act">Suchen</button>
+  <span class="dim" style="margin-left:12px">{{ counts[0] }} von {{ counts[1] }} Topics konfiguriert</span>
+  <a href="/settings/mqtt" style="margin-left:auto;color:var(--acc);text-decoration:none">Broker und Topics einrichten →</a>
 </form>
 
-<h2>Topics</h2>
-{% if topics %}
+{% if rows %}
 <table>
-  <tr><th>Topic</th><th>Ziel</th><th>Zeitfeld</th><th>Felder</th><th>zuletzt</th><th>aktiv</th><th></th></tr>
-  {% for id, topic, tdb, table, tpath, tlocal, enabled, note, last_seen, last_error in topics %}
+  <tr><th style="width:280px">Topic</th><th style="width:90px">Nachrichten</th><th style="width:130px">zuletzt</th><th>letzter Inhalt</th><th style="width:120px"></th></tr>
+  {% for topic, first_seen, last_seen, messages, matched, payload in rows %}
   <tr>
-    <td class="mono"><a href="/mqtt/map?topic_id={{ id }}" style="color:var(--acc);text-decoration:none">{{ topic }}</a>
-        {% if note %}<div class="dim">{{ note }}</div>{% endif %}
-        {% if last_error %}<div class="bad mono">{{ last_error[:70] }}</div>{% endif %}</td>
-    <td class="mono dim">{{ tdb }}.{{ table }}</td>
-    <td class="mono dim">{{ tpath or 'Empfangszeit' }}</td>
-    <td><a href="/mqtt/map?topic_id={{ id }}" style="color:var(--acc);text-decoration:none">{{ fields[id]|length }} zugeordnet</a></td>
-    <td class="dim">{{ last_seen.strftime('%d.%m. %H:%M:%S') if last_seen else '—' }}</td>
-    <td><form method="post" action="/mqtt/topic/toggle" class="inline"><input type="hidden" name="id" value="{{ id }}">
-        <button class="link">{% if enabled %}<span class="pill ok">ja</span>{% else %}<span class="pill bad">nein</span>{% endif %}</button></form></td>
-    <td><form method="post" action="/mqtt/topic/delete" class="inline"><input type="hidden" name="id" value="{{ id }}">
-        <button class="link">entfernen</button></form></td>
+    <td class="mono">{{ topic }}
+      {% if matched %}<span class="pill ok" style="margin-left:6px">konfiguriert</span>
+      {% else %}<span class="pill warn" style="margin-left:6px">nicht zugeordnet</span>{% endif %}
+    </td>
+    <td class="mono dim">{{ messages }}</td>
+    <td class="dim">{{ last_seen.strftime('%d.%m. %H:%M:%S') }}</td>
+    <td class="mono dim" style="font-size:12px">
+      {% for path, value in flatten(payload)[:6] %}{{ path }}={{ value }}{% if not loop.last %} · {% endif %}{% endfor %}
+      {% if flatten(payload)|length > 6 %} <span class="dim">… {{ flatten(payload)|length - 6 }} weitere</span>{% endif %}
+    </td>
+    <td>
+      {% if topic in configured %}
+        <a href="/mqtt/map?topic_id={{ configured[topic] }}" style="color:var(--acc);text-decoration:none">Zuordnung</a>
+      {% else %}
+        <form method="post" action="/mqtt/forget" class="inline">
+          <input type="hidden" name="topic" value="{{ topic }}"><button class="link">vergessen</button></form>
+      {% endif %}
+    </td>
   </tr>
   {% endfor %}
 </table>
+<p class="note">{{ rows|length }} Topics (max. 200). Hier steht, was tatsächlich am Broker ankommt — auch Topics ohne Zuordnung, damit du siehst, was es überhaupt gibt. Ein Topic mit dem Muster <span class="mono">#</span> und ohne Feldzuordnung wirkt als reine Erkundung: es schreibt nichts, füllt aber diese Liste.</p>
 {% else %}
-<p class="dim">Noch kein Topic angelegt.</p>
-<p class="note"><b>So geht es weiter:</b> unten ein Topic anlegen — danach landest du direkt auf der Zuordnungsseite. Dort fügst du ein Beispieltelegramm ein (oder wartest auf das erste vom Broker) und verbindest jeden JSON-Pfad mit einer Spalte der Zieltabelle. Ohne Zuordnung wird nichts gespeichert.</p>
+<p class="dim">Noch nichts empfangen.</p>
+<p class="note">Sobald der Broker unter <a href="/settings/mqtt" style="color:var(--acc)">Einstellungen → MQTT</a> eingerichtet und ein Topic angelegt ist, erscheinen hier die eingehenden Nachrichten — auch solche ohne Feldzuordnung.</p>
 {% endif %}
-
-<h2>Topic hinzufügen</h2>
-<p class="note">Platzhalter erlaubt: <span class="mono">+</span> für eine Ebene, <span class="mono">#</span> für den Rest. Für Tasmota typischerweise <span class="mono">tele/&lt;gerät&gt;/SENSOR</span>. Das Zeitfeld ist der Pfad im Telegramm, etwa <span class="mono">Time</span> — leer bedeutet, dass die Empfangszeit verwendet wird.</p>
-<form method="post" action="/mqtt/topic" class="bar">
-  <input name="topic" placeholder="tele/+/SENSOR" class="mono" style="min-width:220px" required>
-  <select name="target_db" id="tdb" onchange="fillTables()">{% for d in target_dbs %}<option value="{{ d }}">{{ d }}</option>{% endfor %}</select>
-  <select name="target_table" id="ttable" style="min-width:220px" required></select>
-  <input name="time_path" placeholder="Time" class="mono" style="width:110px">
-  <input name="note" placeholder="Notiz" style="min-width:180px">
-  <button class="act">Anlegen</button>
-</form>
-
-<script>
-// Welche Tabellen es gibt, kommt aus der Datenbank — freie Texteingabe war
-// faktisch nicht benutzbar, weil man die Namen auswendig wissen musste.
-var TABLES = {{ tables | tojson }};
-function fillTables() {
-  var db = document.getElementById('tdb').value,
-      sel = document.getElementById('ttable');
-  sel.innerHTML = '';
-  (TABLES[db] || []).forEach(function (t) {
-    var o = document.createElement('option');
-    o.value = t; o.textContent = t; sel.appendChild(o);
-  });
-}
-fillTables();
-</script>
 {% endblock %}

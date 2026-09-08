@@ -95,12 +95,14 @@ def status(request: Request, _: str = Depends(auth)):
         SELECT updated_at, started_at, knx_connected, ha_connected,
                knx_received, knx_written, knx_skipped, knx_undecoded,
                knx_dropped, ha_received, ha_written, ha_skipped, ha_dropped,
+               mqtt_connected, mqtt_received, mqtt_mapped, mqtt_unmatched,
                now() - updated_at AS age
         FROM collector_status WHERE id = 1""")
     cols = ["updated_at", "started_at", "knx_connected", "ha_connected",
             "knx_received", "knx_written", "knx_skipped", "knx_undecoded",
             "knx_dropped", "ha_received", "ha_written", "ha_skipped",
-            "ha_dropped", "age"]
+            "ha_dropped", "mqtt_connected", "mqtt_received", "mqtt_mapped",
+            "mqtt_unmatched", "age"]
     st = dict(zip(cols, rows[0], strict=True)) if rows else {}
     no_dpt = query(db.KNX_DSN,
                    "SELECT address, name FROM knx_ga WHERE dpt IS NULL"
@@ -291,7 +293,7 @@ SECURE_MODES = {"tunnel_secure", "routing_secure"}
 TUNNEL_MODES = {"tunnel", "tunnel_tcp", "tunnel_secure"}
 
 
-@app.get("/knx/connection", response_class=HTMLResponse)
+@app.get("/settings/knx", response_class=HTMLResponse)
 def connection_view(request: Request, saved: str = "", _: str = Depends(auth)):
     import keyring_store
     cfg = dict(query(db.KNX_DSN,
@@ -306,13 +308,13 @@ def connection_view(request: Request, saved: str = "", _: str = Depends(auth)):
         except Exception as exc:  # noqa: BLE001 — shown to the user
             error = str(exc)
     mode = cfg.get("knx.connection") or "tunnel"
-    return page(request, "connection.html", cfg=cfg, st=st, error=error,
+    return page(request, "settings_knx.html", cfg=cfg, st=st, error=error,
                 interfaces=interfaces, modes=MODES, mode=mode,
                 is_secure=mode in SECURE_MODES,
                 is_tunnel=mode in TUNNEL_MODES, saved=saved)
 
 
-@app.post("/knx/connection")
+@app.post("/settings/knx")
 def connection_save(connection: str = Form(...), gateway_host: str = Form(""),
                     gateway_port: str = Form(""),
                     individual_address: str = Form(""),
@@ -329,23 +331,23 @@ def connection_save(connection: str = Form(...), gateway_host: str = Form(""),
         execute(db.KNX_DSN,
                 "UPDATE settings SET value = %s, updated_at = now()"
                 " WHERE key = %s", (value, key))
-    return RedirectResponse("/knx/connection?saved=ok", status_code=303)
+    return RedirectResponse("/settings/knx?saved=ok", status_code=303)
 
 
-@app.post("/knx/connection/keyring")
+@app.post("/settings/knx/keyring")
 async def connection_keyring(file: UploadFile, password: str = Form(...),
                              _: str = Depends(auth)):
     import keyring_store
     try:
         keyring_store.store(await file.read(), password)
     except Exception:  # noqa: BLE001 — wrong password or not a keyring
-        return RedirectResponse("/knx/connection?saved=invalid",
+        return RedirectResponse("/settings/knx?saved=invalid",
                                 status_code=303)
     execute(db.KNX_DSN,
             "UPDATE settings SET value = %s, updated_at = now()"
             " WHERE key = 'knx.keyring_path'",
             (str(keyring_store.KEYRING_FILE),))
-    return RedirectResponse("/knx/connection?saved=keyring", status_code=303)
+    return RedirectResponse("/settings/knx?saved=keyring", status_code=303)
 
 
 # ── messages: raw values and dropped rows ─────────────────────────────────
@@ -383,6 +385,41 @@ def messages_clear(_: str = Depends(auth)):
     with contextlib.suppress(OSError):
         writer.SPOOL_FILE.unlink(missing_ok=True)
     return RedirectResponse("/messages", status_code=303)
+
+
+# ── MQTT data view ────────────────────────────────────────────────────────
+@app.get("/mqtt", response_class=HTMLResponse)
+def mqtt_data(request: Request, q: str = "", only: str = "all",
+              _: str = Depends(auth)):
+    """What actually arrives on the broker — the counterpart to the KNX and
+    Home Assistant lists."""
+    where, args = ["true"], []
+    if q:
+        where.append("topic ILIKE %s")
+        args.append(f"%{q}%")
+    if only == "unmatched":
+        where.append("NOT matched")
+    elif only == "matched":
+        where.append("matched")
+    rows = query(db.KNX_DSN,
+                 "SELECT topic, first_seen, last_seen, messages, matched,"
+                 " payload FROM mqtt_seen"
+                 f" WHERE {' AND '.join(where)}"
+                 " ORDER BY last_seen DESC LIMIT 200", tuple(args))
+    configured = {r[0]: r[1] for r in query(
+        db.KNX_DSN, "SELECT topic, id FROM mqtt_topic")}
+    counts = query(db.KNX_DSN,
+                   "SELECT count(*) FILTER (WHERE matched), count(*)"
+                   " FROM mqtt_seen")[0]
+    return page(request, "mqtt.html", rows=rows, q=q, only=only,
+                configured=configured, counts=counts,
+                flatten=_flatten)
+
+
+@app.post("/mqtt/forget")
+def mqtt_forget(topic: str = Form(...), _: str = Depends(auth)):
+    execute(db.KNX_DSN, "DELETE FROM mqtt_seen WHERE topic = %s", (topic,))
+    return RedirectResponse("/mqtt", status_code=303)
 
 
 # ── exclusions ────────────────────────────────────────────────────────────
@@ -484,8 +521,8 @@ def _flatten(payload, prefix="") -> list[tuple[str, object]]:
     return out
 
 
-@app.get("/mqtt", response_class=HTMLResponse)
-def mqtt_view(request: Request, saved: str = "", _: str = Depends(auth)):
+@app.get("/settings/mqtt", response_class=HTMLResponse)
+def mqtt_config(request: Request, saved: str = "", _: str = Depends(auth)):
     cfg = dict(query(db.KNX_DSN,
                      "SELECT key, value FROM settings WHERE key LIKE %s"
                      " ORDER BY key", ("mqtt.%",)))
@@ -500,13 +537,13 @@ def mqtt_view(request: Request, saved: str = "", _: str = Depends(auth)):
                              " FROM mqtt_field WHERE topic_id=%s"
                              " ORDER BY column_name", (t[0],))
     import mqtt_source
-    return page(request, "mqtt.html", cfg=cfg, topics=topics, fields=fields,
+    return page(request, "settings_mqtt.html", cfg=cfg, topics=topics, fields=fields,
                 saved=saved,
                 password_stored=mqtt_source.PASSWORD_FILE.exists(),
                 target_dbs=sorted(TARGET_DBS), tables=_all_tables())
 
 
-@app.post("/mqtt/broker")
+@app.post("/settings/mqtt/broker")
 def mqtt_broker(request: Request, enabled: str = Form(""),
                 host: str = Form(""), port: str = Form("1883"),
                 tls: str = Form(""), tls_insecure: str = Form(""),
@@ -530,10 +567,10 @@ def mqtt_broker(request: Request, enabled: str = Form(""),
         mqtt_source.STATE_DIR.mkdir(parents=True, exist_ok=True)
         mqtt_source.PASSWORD_FILE.write_text(password)
         mqtt_source.PASSWORD_FILE.chmod(0o600)
-    return RedirectResponse("/mqtt?saved=broker", status_code=303)
+    return RedirectResponse("/settings/mqtt?saved=broker", status_code=303)
 
 
-@app.post("/mqtt/topic")
+@app.post("/settings/mqtt/topic")
 def mqtt_topic_add(topic: str = Form(...), target_db: str = Form(...),
                    target_table: str = Form(...), time_path: str = Form(""),
                    note: str = Form(""), _: str = Depends(auth)):
@@ -553,17 +590,17 @@ def mqtt_topic_add(topic: str = Form(...), target_db: str = Form(...),
     return RedirectResponse(f"/mqtt/map?topic_id={rows[0][0]}", status_code=303)
 
 
-@app.post("/mqtt/topic/delete")
+@app.post("/settings/mqtt/topic/delete")
 def mqtt_topic_delete(id: int = Form(...), _: str = Depends(auth)):
     execute(db.KNX_DSN, "DELETE FROM mqtt_topic WHERE id=%s", (id,))
-    return RedirectResponse("/mqtt", status_code=303)
+    return RedirectResponse("/settings/mqtt", status_code=303)
 
 
-@app.post("/mqtt/topic/toggle")
+@app.post("/settings/mqtt/topic/toggle")
 def mqtt_topic_toggle(id: int = Form(...), _: str = Depends(auth)):
     execute(db.KNX_DSN,
             "UPDATE mqtt_topic SET enabled = NOT enabled WHERE id=%s", (id,))
-    return RedirectResponse("/mqtt", status_code=303)
+    return RedirectResponse("/settings/mqtt", status_code=303)
 
 
 @app.get("/mqtt/map", response_class=HTMLResponse)
@@ -630,6 +667,10 @@ def mqtt_map_delete(id: int = Form(...), topic_id: int = Form(...),
 
 
 # ── settings ──────────────────────────────────────────────────────────────
+SETTINGS_TABS = [("general", "Allgemein"), ("knx", "KNX"),
+                 ("mqtt", "MQTT"), ("import", "ETS-Import")]
+
+
 @app.get("/settings", response_class=HTMLResponse)
 def settings_view(request: Request, _: str = Depends(auth)):
     # knx.* and mqtt.* live on their own pages — the same setting in two

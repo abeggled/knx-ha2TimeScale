@@ -16,6 +16,10 @@ CREATE TABLE IF NOT EXISTS collector_status (
     ha_written    bigint DEFAULT 0,
     ha_skipped    bigint DEFAULT 0,
     ha_dropped    bigint DEFAULT 0,
+    mqtt_connected boolean,
+    mqtt_received bigint DEFAULT 0,
+    mqtt_mapped   bigint DEFAULT 0,
+    mqtt_unmatched bigint DEFAULT 0,
     last_error    text
 );
 

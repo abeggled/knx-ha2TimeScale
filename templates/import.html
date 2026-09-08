@@ -1,5 +1,7 @@
-{% extends "base.html" %}{% set nav='import' %}
+{% extends "base.html" %}{% set nav='settings' %}
 {% block body %}
+{% set tab = 'import' %}
+{% include '_settings_tabs.html' %}
 {% if not job %}
 <h2>ETS-Projekt importieren</h2>
 <p class="note">Die Datei wird nur zum Auslesen der Gruppenadressen verwendet und danach gelöscht. Das Parsen dauert einige Minuten. Anschliessend siehst du die Änderungen und entscheidest, ob sie übernommen werden.</p>

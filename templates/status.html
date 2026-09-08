@@ -15,6 +15,9 @@
   <div class="card"><div class="k">Home Assistant</div><div class="v">
     <span class="pill {{ 'ok' if st.ha_connected else 'bad' }}">{{ 'verbunden' if st.ha_connected else 'getrennt' }}</span>
   </div><div class="dim">{{ '{:,}'.format(st.ha_written).replace(',', "'") }} Zeilen geschrieben</div></div>
+  <div class="card"><div class="k">MQTT</div><div class="v">
+    {% if st.mqtt_received %}<span class="pill ok">empfängt</span>{% else %}<span class="pill">inaktiv</span>{% endif %}
+  </div><div class="dim">{{ st.mqtt_mapped or 0 }} zugeordnet, {{ st.mqtt_unmatched or 0 }} ohne Zuordnung</div></div>
   <div class="card"><div class="k">Verworfen</div><div class="v">
     <span class="{{ 'bad' if (st.knx_dropped + st.ha_dropped) else '' }}">{{ st.knx_dropped + st.ha_dropped }}</span>
   </div><div class="dim">als Rohwert gespeichert: {{ st.knx_undecoded }}</div></div>
@@ -23,6 +26,7 @@
   <tr><th></th><th>empfangen</th><th>geschrieben</th><th>ausgeschlossen</th></tr>
   <tr><td>KNX</td><td class="mono">{{ st.knx_received }}</td><td class="mono">{{ st.knx_written }}</td><td class="mono">{{ st.knx_skipped }}</td></tr>
   <tr><td>Home Assistant</td><td class="mono">{{ st.ha_received }}</td><td class="mono">{{ st.ha_written }}</td><td class="mono">{{ st.ha_skipped }}</td></tr>
+  <tr><td>MQTT</td><td class="mono">{{ st.mqtt_received or 0 }}</td><td class="mono">{{ st.mqtt_mapped or 0 }}</td><td class="mono">{{ st.mqtt_unmatched or 0 }}</td></tr>
 </table>
 <p class="note">Zähler seit dem Start des Collectors ({{ st.started_at }}).</p>
 {% endif %}

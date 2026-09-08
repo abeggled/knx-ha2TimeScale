@@ -1,6 +1,6 @@
-{% extends "base.html" %}{% set nav='mqtt' %}
+{% extends "base.html" %}{% set nav='settings' %}
 {% block body %}
-<p><a href="/mqtt" style="color:var(--acc);text-decoration:none">&larr; zurück zu MQTT</a></p>
+<p><a href="/settings/mqtt" style="color:var(--acc);text-decoration:none">&larr; zurück zu den MQTT-Einstellungen</a></p>
 <h2 class="mono">{{ topic }}</h2>
 {% if saved == 'invalid' %}<p><span class="pill bad">nicht übernommen</span> Das eingefügte Telegramm ist kein gültiges JSON — die bisherige Vorlage bleibt erhalten.</p>{% endif %}
 <p class="note">Ziel: <span class="mono">{{ target_db }}.{{ target_table }}</span>. Jedes Feld verbindet einen JSON-Pfad mit einer Spalte; der Faktor wird vor dem Speichern multipliziert.</p>

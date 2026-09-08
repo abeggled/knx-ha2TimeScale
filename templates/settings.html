@@ -1,5 +1,7 @@
 {% extends "base.html" %}{% set nav='settings' %}
 {% block body %}
+{% set tab = 'general' %}
+{% include '_settings_tabs.html' %}
 <h2>Einstellungen</h2>
 <p class="note">Änderungen greifen beim nächsten Reload der Registry (alle 10 Minuten) oder sofort mit <span class="mono">systemctl reload homearchive</span>. Verbindungsparameter für KNX werden erst bei einem Neustart des Dienstes übernommen.</p>
 <form method="post" action="/settings/save">

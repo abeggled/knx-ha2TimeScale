@@ -59,7 +59,9 @@ async def status_loop(knx, ha, knx_writer, ha_writer, mqtt, started: str) -> Non
                          knx_received = %s, knx_written = %s, knx_skipped = %s,
                          knx_undecoded = %s, knx_dropped = %s,
                          ha_received = %s, ha_written = %s, ha_skipped = %s,
-                         ha_dropped = %s
+                         ha_dropped = %s,
+                         mqtt_connected = %s, mqtt_received = %s,
+                         mqtt_mapped = %s, mqtt_unmatched = %s
                        WHERE id = 1""",
                     (
                         started,
@@ -74,6 +76,10 @@ async def status_loop(knx, ha, knx_writer, ha_writer, mqtt, started: str) -> Non
                         ha_writer.written if ha_writer else 0,
                         ha.skipped if ha else 0,
                         ha_writer.dropped if ha_writer else 0,
+                        bool(mqtt and mqtt.received),
+                        mqtt.received if mqtt else 0,
+                        mqtt.mapped if mqtt else 0,
+                        mqtt.unmatched if mqtt else 0,
                     ),
                 )
         except Exception as exc:  # noqa: BLE001 — heartbeat must never kill the run

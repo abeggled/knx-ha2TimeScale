@@ -52,3 +52,15 @@ INSERT INTO settings (key, value, note) VALUES
     ('mqtt.client_id',    'homearchive', 'Client-ID am Broker'),
     ('mqtt.qos',          '0',     '0, 1 oder 2')
 ON CONFLICT (key) DO NOTHING;
+
+-- Every topic that actually arrived, whether it is configured or not. Makes
+-- the broker browsable: subscribe to '#' without a mapping and this table
+-- fills up with what is out there.
+CREATE TABLE IF NOT EXISTS mqtt_seen (
+    topic       text PRIMARY KEY,
+    first_seen  timestamptz NOT NULL DEFAULT now(),
+    last_seen   timestamptz NOT NULL DEFAULT now(),
+    messages    bigint NOT NULL DEFAULT 0,
+    payload     jsonb,
+    matched     boolean NOT NULL DEFAULT false
+);

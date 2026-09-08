@@ -87,6 +87,7 @@ class MQTTSource:
         self.unmatched = 0
         self._topics: list[dict] = []
         self._pending: dict[int, tuple[str, str]] = {}   # topic id -> payload
+        self._seen: dict[str, tuple[Any, bool]] = {}     # topic -> payload, matched
 
     # ── configuration ─────────────────────────────────────────────────────
     async def load_mapping(self, dsn: str) -> None:
@@ -116,6 +117,8 @@ class MQTTSource:
         from writer import BatchWriter
         settings = self.registry.settings
         for cfg in self._topics:
+            if not cfg["fields"]:
+                continue                      # nothing to write yet
             columns = ["time"] + [c for _p, c, _s in cfg["fields"]]
             dsn = self.dsn_for_db(cfg["db"])
             if dsn is None:
@@ -144,6 +147,12 @@ class MQTTSource:
         for cfg in self._topics:
             if not topic_matches(cfg["topic"], topic):
                 continue
+            self._seen[topic] = (data, True)
+            if not cfg["fields"]:
+                # Configured but not mapped yet: capture the payload so the
+                # mapping page has something to offer, write nothing.
+                self._pending[cfg["id"]] = (topic, payload.decode("utf-8", "replace"))
+                return
             writer = self.writers.get(cfg["id"])
             if writer is None:
                 continue
@@ -161,6 +170,7 @@ class MQTTSource:
             self._pending[cfg["id"]] = (topic, payload.decode("utf-8", "replace"))
             return
         self.unmatched += 1
+        self._seen[topic] = (data, False)
 
     # ── connection ────────────────────────────────────────────────────────
     def _tls_context(self) -> ssl.SSLContext | None:
@@ -210,16 +220,31 @@ class MQTTSource:
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 120)
 
+    async def _publish_seen(self, conn) -> None:
+        if not self._seen:
+            return
+        seen, self._seen = self._seen, {}
+        await conn.cursor().executemany(
+            "INSERT INTO mqtt_seen (topic, payload, matched, messages)"
+            " VALUES (%s, %s::jsonb, %s, 1)"
+            " ON CONFLICT (topic) DO UPDATE SET last_seen = now(),"
+            " payload = excluded.payload, matched = excluded.matched,"
+            " messages = mqtt_seen.messages + 1",
+            [(topic, json.dumps(data), matched)
+             for topic, (data, matched) in seen.items()],
+        )
+
     async def _publish_samples(self, dsn: str) -> None:
         """Store the newest payload per topic so the UI — a separate process —
         can offer its fields for mapping. Throttled to every 20th message."""
-        if not self._pending:
+        if not self._pending and not self._seen:
             return
         pending, self._pending = self._pending, {}
         try:
             async with await psycopg.AsyncConnection.connect(
                 dsn, autocommit=True
             ) as conn:
+                await self._publish_seen(conn)
                 await conn.cursor().executemany(
                     "UPDATE mqtt_topic SET last_seen = now(), last_error = NULL,"
                     " sample_payload = %s::jsonb, sample_at = now(),"
