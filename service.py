@@ -128,7 +128,7 @@ async def main() -> None:
 
     tasks.append(_watch(asyncio.create_task(
         status_loop(knx, ha, knx_writer, ha_writer,
-                    dt.datetime.now(dt.timezone.utc).isoformat()), name="status")))
+                    dt.datetime.now(dt.UTC).isoformat()), name="status")))
 
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()

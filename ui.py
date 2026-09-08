@@ -14,6 +14,7 @@ Configuration (environment):
 from __future__ import annotations
 
 import base64
+import contextlib
 import hashlib
 import hmac
 import json
@@ -100,7 +101,7 @@ def status(request: Request, _: str = Depends(auth)):
             "knx_received", "knx_written", "knx_skipped", "knx_undecoded",
             "knx_dropped", "ha_received", "ha_written", "ha_skipped",
             "ha_dropped", "age"]
-    st = dict(zip(cols, rows[0])) if rows else {}
+    st = dict(zip(cols, rows[0], strict=True)) if rows else {}
     no_dpt = query(db.KNX_DSN,
                    "SELECT address, name FROM knx_ga WHERE dpt IS NULL"
                    " ORDER BY address")
@@ -193,7 +194,7 @@ def knx_edit(request: Request, address: str, saved: str = "",
         raise HTTPException(404, "unknown group address")
     cols = ["address", "name", "dpt", "archive", "origin", "locked", "note",
             "description", "first_seen", "last_seen"]
-    ga = dict(zip(cols, rows[0]))
+    ga = dict(zip(cols, rows[0], strict=True))
     stored_unit = query(db.KNX_DSN,
                         "SELECT unit FROM knx_dpt_unit WHERE dpt = %s",
                         (ga["dpt"],)) if ga["dpt"] else []
@@ -379,10 +380,8 @@ def messages(request: Request, hours: int = 24, _: str = Depends(auth)):
 @app.post("/messages/clear")
 def messages_clear(_: str = Depends(auth)):
     import writer
-    try:
+    with contextlib.suppress(OSError):
         writer.SPOOL_FILE.unlink(missing_ok=True)
-    except OSError:
-        pass
     return RedirectResponse("/messages", status_code=303)
 
 
@@ -544,10 +543,8 @@ def import_apply(job_id: str = Form(...), _: str = Depends(auth)):
              len(job["vanished"])),
         )
     job["state"] = "applied"
-    try:
+    with contextlib.suppress(OSError):
         os.unlink(job["path"])
-    except OSError:
-        pass
     return RedirectResponse(f"/import?job={job_id}", status_code=303)
 
 

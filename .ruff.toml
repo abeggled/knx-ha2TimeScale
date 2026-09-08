@@ -1,0 +1,12 @@
+line-length = 88
+target-version = "py313"
+
+[lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM"]
+ignore = [
+    "B008",  # FastAPI uses Depends()/Form() as defaults by design
+    "E501",  # long lines are caught by the formatter, not worth failing CI
+]
+
+[lint.per-file-ignores]
+"tests/*" = ["S101"]

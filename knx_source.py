@@ -225,7 +225,7 @@ class KNXSource:
         unit = self.registry.unit_for(dpt, getattr(transcoder, "unit", None))
 
         self.writer.submit((
-            dt.datetime.now(dt.timezone.utc),
+            dt.datetime.now(dt.UTC),
             str(telegram.source_address),
             dpt or "",
             self.registry.name_for(destination),

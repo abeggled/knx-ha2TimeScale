@@ -49,9 +49,9 @@ class HASource:
         try:
             ts = dt.datetime.fromisoformat(when)
         except (TypeError, ValueError):
-            ts = dt.datetime.now(dt.timezone.utc)
+            ts = dt.datetime.now(dt.UTC)
         if ts.tzinfo is None:
-            ts = ts.replace(tzinfo=dt.timezone.utc)
+            ts = ts.replace(tzinfo=dt.UTC)
 
         self.writer.submit((ts, entity_id, new_state.get("state")))
 
@@ -59,8 +59,8 @@ class HASource:
         url = self.registry.settings.get("ha.websocket_url")
         if not url:
             raise RuntimeError("setting ha.websocket_url is empty")
-        async with aiohttp.ClientSession() as session:
-            async with session.ws_connect(url, heartbeat=30) as ws:
+        async with (aiohttp.ClientSession() as session,
+                    session.ws_connect(url, heartbeat=30) as ws):
                 await ws.receive_json()              # auth_required
                 await ws.send_json({"type": "auth", "access_token": self._token()})
                 auth = await ws.receive_json()

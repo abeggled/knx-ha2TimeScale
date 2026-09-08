@@ -71,7 +71,7 @@ class BatchWriter:
             SPOOL_DIR.mkdir(parents=True, exist_ok=True)
             with SPOOL_FILE.open("a") as fh:
                 json.dump({"table": self.table,
-                           "at": dt.datetime.now(dt.timezone.utc).isoformat(),
+                           "at": dt.datetime.now(dt.UTC).isoformat(),
                            "row": [str(v) for v in row]}, fh)
                 fh.write("\n")
             if SPOOL_FILE.stat().st_size > SPOOL_MAX_BYTES:
@@ -94,10 +94,9 @@ class BatchWriter:
         while True:
             try:
                 conn = await self._connect()
-                async with conn.cursor() as cur:
-                    async with cur.copy(stmt) as cp:
-                        for row in rows:
-                            await cp.write_row(row)
+                async with conn.cursor() as cur, cur.copy(stmt) as cp:
+                    for row in rows:
+                        await cp.write_row(row)
                 self.written += len(rows)
                 self._spooled = 0      # database is healthy again
                 return

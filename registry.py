@@ -41,7 +41,7 @@ class Registry:
         async with await psycopg.AsyncConnection.connect(self.knx_dsn) as conn:
             cur = conn.cursor()
             await cur.execute("SELECT key, value FROM settings")
-            self.settings = {k: v for k, v in await cur.fetchall()}
+            self.settings = dict(await cur.fetchall())
 
             await cur.execute("SELECT address, name, dpt, archive FROM knx_ga")
             self.ga = {
@@ -49,7 +49,7 @@ class Registry:
             }
 
             await cur.execute("SELECT dpt, unit FROM knx_dpt_unit")
-            self.units = {d: u for d, u in await cur.fetchall()}
+            self.units = dict(await cur.fetchall())
 
             await cur.execute(
                 "SELECT kind, pattern FROM archive_exclude_pattern"
@@ -63,7 +63,7 @@ class Registry:
         async with await psycopg.AsyncConnection.connect(self.ha_dsn) as conn:
             cur = conn.cursor()
             await cur.execute("SELECT entity_id, archive FROM ha_entity")
-            self.ha_entities = {e: a for e, a in await cur.fetchall()}
+            self.ha_entities = dict(await cur.fetchall())
 
         log.info(
             "registry: %d group addresses, %d HA entities, "
