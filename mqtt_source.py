@@ -28,6 +28,10 @@ STATE_DIR = pathlib.Path(
 )
 PASSWORD_FILE = STATE_DIR / "mqtt.pass"
 
+# How often the topic/field mapping is re-read while connected. Editing the
+# mapping in the UI must take effect without restarting the service.
+RELOAD_SECONDS = 30
+
 
 def broker_password() -> str | None:
     if pw := os.environ.get("MQTT_PASSWORD"):
@@ -87,7 +91,9 @@ class MQTTSource:
         self.unmatched = 0
         self._topics: list[dict] = []
         self._pending: dict[int, tuple[str, str]] = {}   # topic id -> payload
-        self._seen: dict[str, tuple[Any, bool]] = {}     # topic -> payload, matched
+        self._seen: dict[str, tuple[Any, bool, int]] = {}  # topic -> payload, matched, count
+        self._mapping_signature: tuple | None = None
+        self.reload_requested = False
 
     # ── configuration ─────────────────────────────────────────────────────
     async def load_mapping(self, dsn: str) -> None:
@@ -105,8 +111,14 @@ class MQTTSource:
                 topics.append({"id": tid, "topic": topic, "db": tdb,
                                "table": table, "time_path": tpath,
                                "time_local": tlocal, "fields": fields})
+        signature = tuple((t["id"], t["topic"], t["table"], tuple(t["fields"]))
+                          for t in topics)
+        changed = signature != self._mapping_signature
+        self._mapping_signature = signature
         self._topics = topics
         self._build_writers()
+        if not changed:
+            return
         log.info("MQTT mapping: %d topics, %d fields",
                  len(topics), sum(len(t["fields"]) for t in topics))
 
@@ -147,7 +159,7 @@ class MQTTSource:
         for cfg in self._topics:
             if not topic_matches(cfg["topic"], topic):
                 continue
-            self._seen[topic] = (data, True)
+            self._bump(topic, data, True)
             if not cfg["fields"]:
                 # Configured but not mapped yet: capture the payload so the
                 # mapping page has something to offer, write nothing.
@@ -170,7 +182,11 @@ class MQTTSource:
             self._pending[cfg["id"]] = (topic, payload.decode("utf-8", "replace"))
             return
         self.unmatched += 1
-        self._seen[topic] = (data, False)
+        self._bump(topic, data, False)
+
+    def _bump(self, topic: str, data, matched: bool) -> None:
+        _payload, _matched, count = self._seen.get(topic, (None, matched, 0))
+        self._seen[topic] = (data, matched, count + 1)
 
     # ── connection ────────────────────────────────────────────────────────
     def _tls_context(self) -> ssl.SSLContext | None:
@@ -211,10 +227,22 @@ class MQTTSource:
                         await client.subscribe(cfg["topic"], qos=qos)
                         log.info("MQTT subscribed to %s", cfg["topic"])
                     backoff = 5
+                    subscribed = {c["topic"] for c in self._topics}
+                    last_reload = asyncio.get_running_loop().time()
                     async for message in client.messages:
                         self.handle(str(message.topic), message.payload)
                         if self.received % 20 == 0:
                             await self._publish_samples(dsn)
+                        now = asyncio.get_running_loop().time()
+                        if now - last_reload > RELOAD_SECONDS or self.reload_requested:
+                            last_reload = now
+                            self.reload_requested = False
+                            await self.load_mapping(dsn)
+                            new = {c["topic"] for c in self._topics}
+                            for topic in new - subscribed:
+                                await client.subscribe(topic, qos=qos)
+                                log.info("MQTT subscribed to %s", topic)
+                            subscribed = new
             except Exception as exc:  # noqa: BLE001 — reconnect on anything
                 log.warning("MQTT: %s — retrying in %ds", exc, backoff)
                 await asyncio.sleep(backoff)
@@ -226,12 +254,12 @@ class MQTTSource:
         seen, self._seen = self._seen, {}
         await conn.cursor().executemany(
             "INSERT INTO mqtt_seen (topic, payload, matched, messages)"
-            " VALUES (%s, %s::jsonb, %s, 1)"
+            " VALUES (%s, %s::jsonb, %s, %s)"
             " ON CONFLICT (topic) DO UPDATE SET last_seen = now(),"
             " payload = excluded.payload, matched = excluded.matched,"
-            " messages = mqtt_seen.messages + 1",
-            [(topic, json.dumps(data), matched)
-             for topic, (data, matched) in seen.items()],
+            " messages = mqtt_seen.messages + excluded.messages",
+            [(topic, json.dumps(data), matched, count)
+             for topic, (data, matched, count) in seen.items()],
         )
 
     async def _publish_samples(self, dsn: str) -> None:

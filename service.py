@@ -156,9 +156,12 @@ async def main() -> None:
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, stop.set)
     # SIGHUP reloads registry immediately (after an ETS import, for example).
-    loop.add_signal_handler(
-        signal.SIGHUP, lambda: _watch(asyncio.create_task(registry.load()))
-    )
+    def _reload() -> None:
+        _watch(asyncio.create_task(registry.load()))
+        if mqtt is not None:
+            mqtt.reload_requested = True
+
+    loop.add_signal_handler(signal.SIGHUP, _reload)
 
     log.info("collector started%s", " (dry run)" if args.dry_run else "")
     await stop.wait()

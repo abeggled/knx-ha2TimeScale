@@ -5,6 +5,8 @@
 {% if saved == 'invalid' %}<p><span class="pill bad">nicht übernommen</span> Das eingefügte Telegramm ist kein gültiges JSON — die bisherige Vorlage bleibt erhalten.</p>{% endif %}
 <p class="note">Ziel: <span class="mono">{{ target_db }}.{{ target_table }}</span>. Jedes Feld verbindet einen JSON-Pfad mit einer Spalte; der Faktor wird vor dem Speichern multipliziert.</p>
 
+<p class="note">Änderungen übernimmt der Collector innerhalb von 30 Sekunden, ohne Neustart. Solange ein Topic <b>kein</b> zugeordnetes Feld hat, wird nichts geschrieben — es liefert nur die Vorlage.</p>
+
 <h2>Zugeordnete Felder</h2>
 {% if fields %}
 <table>
