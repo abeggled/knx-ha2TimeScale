@@ -50,21 +50,26 @@
 <p class="note">Platzhalter erlaubt: <span class="mono">+</span> für eine Ebene, <span class="mono">#</span> für den Rest. Für Tasmota typischerweise <span class="mono">tele/&lt;gerät&gt;/SENSOR</span>. Das Zeitfeld ist der Pfad im Telegramm, etwa <span class="mono">Time</span> — leer bedeutet, dass die Empfangszeit verwendet wird.</p>
 <form method="post" action="/mqtt/topic" class="bar">
   <input name="topic" placeholder="tele/+/SENSOR" class="mono" style="min-width:220px" required>
-  <select name="target_db">{% for d in target_dbs %}<option value="{{ d }}">{{ d }}</option>{% endfor %}</select>
-  <input name="target_table" placeholder="meter_measurements" class="mono" style="min-width:200px" required>
+  <select name="target_db" id="tdb" onchange="fillTables()">{% for d in target_dbs %}<option value="{{ d }}">{{ d }}</option>{% endfor %}</select>
+  <select name="target_table" id="ttable" style="min-width:220px" required></select>
   <input name="time_path" placeholder="Time" class="mono" style="width:110px">
   <input name="note" placeholder="Notiz" style="min-width:180px">
   <button class="act">Anlegen</button>
 </form>
 
-<h2>Zuletzt empfangene Telegramme</h2>
-{% if samples %}
-<p class="note">Was tatsächlich am Broker ankommt — Grundlage für die Feldzuordnung. Wird alle 20 Nachrichten aktualisiert.</p>
-{% for name, entry in samples.items() %}
-<p class="mono">{{ name }} <span class="dim">— {{ entry.at[11:19] }} UTC</span></p>
-<pre class="mono" style="background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px;overflow-x:auto">{{ entry.payload | tojson(indent=2) }}</pre>
-{% endfor %}
-{% else %}
-<p class="dim">Noch nichts empfangen. Sobald der Broker eingerichtet und die Quelle aktiv ist, erscheinen hier die Rohtelegramme.</p>
-{% endif %}
+<script>
+// Welche Tabellen es gibt, kommt aus der Datenbank — freie Texteingabe war
+// faktisch nicht benutzbar, weil man die Namen auswendig wissen musste.
+var TABLES = {{ tables | tojson }};
+function fillTables() {
+  var db = document.getElementById('tdb').value,
+      sel = document.getElementById('ttable');
+  sel.innerHTML = '';
+  (TABLES[db] || []).forEach(function (t) {
+    var o = document.createElement('option');
+    o.value = t; o.textContent = t; sel.appendChild(o);
+  });
+}
+fillTables();
+</script>
 {% endblock %}

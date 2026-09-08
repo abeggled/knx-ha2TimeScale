@@ -26,7 +26,6 @@ log = logging.getLogger(__name__)
 STATE_DIR = pathlib.Path(
     os.environ.get("STATE_DIRECTORY", "/var/lib/homearchive").split(":")[0]
 )
-SAMPLE_FILE = STATE_DIR / "mqtt_samples.json"
 PASSWORD_FILE = STATE_DIR / "mqtt.pass"
 
 
@@ -86,8 +85,8 @@ class MQTTSource:
         self.received = 0
         self.mapped = 0
         self.unmatched = 0
-        self.samples: dict[str, dict] = {}
         self._topics: list[dict] = []
+        self._pending: dict[int, tuple[str, str]] = {}   # topic id -> payload
 
     # ── configuration ─────────────────────────────────────────────────────
     async def load_mapping(self, dsn: str) -> None:
@@ -142,9 +141,6 @@ class MQTTSource:
             self.unmatched += 1
             log.debug("no JSON on %s", topic)
             return
-        self.samples[topic] = {"at": dt.datetime.now(dt.UTC).isoformat(),
-                               "payload": data}
-
         for cfg in self._topics:
             if not topic_matches(cfg["topic"], topic):
                 continue
@@ -162,6 +158,7 @@ class MQTTSource:
                 values.append(raw)          # None stays None -> NULL
             writer.submit(tuple(values))
             self.mapped += 1
+            self._pending[cfg["id"]] = (topic, payload.decode("utf-8", "replace"))
             return
         self.unmatched += 1
 
@@ -206,19 +203,28 @@ class MQTTSource:
                     backoff = 5
                     async for message in client.messages:
                         self.handle(str(message.topic), message.payload)
-                        self._persist_samples()
+                        if self.received % 20 == 0:
+                            await self._publish_samples(dsn)
             except Exception as exc:  # noqa: BLE001 — reconnect on anything
                 log.warning("MQTT: %s — retrying in %ds", exc, backoff)
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 120)
 
-    def _persist_samples(self) -> None:
-        """The UI is a separate process, so the newest payload goes to disk.
-        Throttled: every 20th message is enough to build a mapping against."""
-        if self.received % 20:
+    async def _publish_samples(self, dsn: str) -> None:
+        """Store the newest payload per topic so the UI — a separate process —
+        can offer its fields for mapping. Throttled to every 20th message."""
+        if not self._pending:
             return
+        pending, self._pending = self._pending, {}
         try:
-            STATE_DIR.mkdir(parents=True, exist_ok=True)
-            SAMPLE_FILE.write_text(json.dumps(self.samples)[:1_000_000])
-        except OSError as exc:
-            log.debug("could not write MQTT samples: %s", exc)
+            async with await psycopg.AsyncConnection.connect(
+                dsn, autocommit=True
+            ) as conn:
+                await conn.cursor().executemany(
+                    "UPDATE mqtt_topic SET last_seen = now(), last_error = NULL,"
+                    " sample_payload = %s::jsonb, sample_at = now(),"
+                    " sample_source = 'broker' WHERE id = %s",
+                    [(payload, tid) for tid, (_topic, payload) in pending.items()],
+                )
+        except Exception as exc:  # noqa: BLE001 — never kill the subscription
+            log.debug("could not store MQTT samples: %s", exc)

@@ -15,6 +15,9 @@ CREATE TABLE IF NOT EXISTS mqtt_topic (
     note          text,
     last_seen     timestamptz,
     last_error    text,
+    sample_payload jsonb,              -- last payload, or one pasted by hand
+    sample_at     timestamptz,
+    sample_source text,                -- 'broker' | 'manual'
     created_at    timestamptz NOT NULL DEFAULT now()
 );
 

@@ -457,12 +457,19 @@ def _columns_of(target_db: str, table: str) -> list[str]:
              "   AND column_name <> 'time' ORDER BY ordinal_position", (table,))]
 
 
-def _samples() -> dict:
-    import mqtt_source
-    try:
-        return json.loads(mqtt_source.SAMPLE_FILE.read_text())
-    except (OSError, ValueError):
-        return {}
+def _tables_of(target_db: str) -> list[str]:
+    """Tables that can receive rows — plain tables and hypertables, no views."""
+    dsn = TARGET_DBS.get(target_db)
+    if not dsn:
+        return []
+    return [r[0] for r in query(
+        dsn, "SELECT table_name FROM information_schema.tables"
+             " WHERE table_schema='public' AND table_type='BASE TABLE'"
+             " ORDER BY table_name")]
+
+
+def _all_tables() -> dict[str, list[str]]:
+    return {name: _tables_of(name) for name in TARGET_DBS}
 
 
 def _flatten(payload, prefix="") -> list[tuple[str, object]]:
@@ -494,9 +501,9 @@ def mqtt_view(request: Request, saved: str = "", _: str = Depends(auth)):
                              " ORDER BY column_name", (t[0],))
     import mqtt_source
     return page(request, "mqtt.html", cfg=cfg, topics=topics, fields=fields,
-                samples=_samples(), saved=saved,
+                saved=saved,
                 password_stored=mqtt_source.PASSWORD_FILE.exists(),
-                target_dbs=sorted(TARGET_DBS))
+                target_dbs=sorted(TARGET_DBS), tables=_all_tables())
 
 
 @app.post("/mqtt/broker")
@@ -557,30 +564,42 @@ def mqtt_topic_toggle(id: int = Form(...), _: str = Depends(auth)):
 
 
 @app.get("/mqtt/map", response_class=HTMLResponse)
-def mqtt_map(request: Request, topic_id: int, _: str = Depends(auth)):
+def mqtt_map(request: Request, topic_id: int, saved: str = "",
+             _: str = Depends(auth)):
     rows = query(db.KNX_DSN,
-                 "SELECT id, topic, target_db, target_table FROM mqtt_topic"
-                 " WHERE id=%s", (topic_id,))
+                 "SELECT id, topic, target_db, target_table, sample_payload,"
+                 " sample_at, sample_source FROM mqtt_topic WHERE id=%s",
+                 (topic_id,))
     if not rows:
         raise HTTPException(404, "unknown topic")
-    tid, topic, tdb, table = rows[0]
+    tid, topic, tdb, table, sample, sample_at, sample_source = rows[0]
     fields = query(db.KNX_DSN,
                    "SELECT id, json_path, column_name, scale, note"
                    " FROM mqtt_field WHERE topic_id=%s ORDER BY column_name",
                    (tid,))
     mapped = {f[1] for f in fields}
-    sample, sample_topic = None, None
-    import mqtt_source
-    for name, entry in _samples().items():
-        if mqtt_source.topic_matches(topic, name):
-            sample, sample_topic = entry, name
-            break
-    leaves = _flatten(sample["payload"]) if sample else []
+    used = {f[2] for f in fields}
+    leaves = _flatten(sample) if sample else []
     return page(request, "mqtt_map.html", tid=tid, topic=topic, target_db=tdb,
-                target_table=table, fields=fields, mapped=mapped,
-                leaves=leaves, sample_topic=sample_topic,
-                sample_at=sample["at"] if sample else None,
+                target_table=table, fields=fields, mapped=mapped, used=used,
+                leaves=leaves, sample_at=sample_at,
+                sample_source=sample_source, saved=saved,
                 columns=_columns_of(tdb, table))
+
+
+@app.post("/mqtt/map/sample")
+def mqtt_map_sample(topic_id: int = Form(...), payload: str = Form(...),
+                    _: str = Depends(auth)):
+    """Paste a telegram to build the mapping before the broker is connected."""
+    try:
+        json.loads(payload)
+    except ValueError:
+        return RedirectResponse(f"/mqtt/map?topic_id={topic_id}&saved=invalid",
+                                status_code=303)
+    execute(db.KNX_DSN,
+            "UPDATE mqtt_topic SET sample_payload=%s::jsonb, sample_at=now(),"
+            " sample_source='manual' WHERE id=%s", (payload, topic_id))
+    return RedirectResponse(f"/mqtt/map?topic_id={topic_id}", status_code=303)
 
 
 @app.post("/mqtt/map/add")
@@ -610,11 +629,12 @@ def mqtt_map_delete(id: int = Form(...), topic_id: int = Form(...),
 # ── settings ──────────────────────────────────────────────────────────────
 @app.get("/settings", response_class=HTMLResponse)
 def settings_view(request: Request, _: str = Depends(auth)):
-    # knx.* lives on its own page — everything about one connection in one
-    # place beats a flat key/value list.
+    # knx.* and mqtt.* live on their own pages — the same setting in two
+    # places invites contradictory edits.
     rows = query(db.KNX_DSN,
                  "SELECT key, value, note FROM settings"
-                 " WHERE key NOT LIKE %s ORDER BY key", ("knx.%",))
+                 " WHERE key NOT LIKE %s AND key NOT LIKE %s ORDER BY key",
+                 ("knx.%", "mqtt.%"))
     return page(request, "settings.html", rows=rows)
 
 

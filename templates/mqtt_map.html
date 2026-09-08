@@ -2,12 +2,13 @@
 {% block body %}
 <p><a href="/mqtt" style="color:var(--acc);text-decoration:none">&larr; zurück zu MQTT</a></p>
 <h2 class="mono">{{ topic }}</h2>
-<p class="note">Ziel: <span class="mono">{{ target_db }}.{{ target_table }}</span>. Jedes Feld verbindet einen JSON-Pfad mit einer Spalte. Der Faktor wird vor dem Speichern multipliziert — damit landen Summen in kW und Phasen in W in derselben Einheit, wenn du es so willst.</p>
+{% if saved == 'invalid' %}<p><span class="pill bad">nicht übernommen</span> Das eingefügte Telegramm ist kein gültiges JSON — die bisherige Vorlage bleibt erhalten.</p>{% endif %}
+<p class="note">Ziel: <span class="mono">{{ target_db }}.{{ target_table }}</span>. Jedes Feld verbindet einen JSON-Pfad mit einer Spalte; der Faktor wird vor dem Speichern multipliziert.</p>
 
 <h2>Zugeordnete Felder</h2>
 {% if fields %}
 <table>
-  <tr><th>JSON-Pfad</th><th>Spalte</th><th>Faktor</th><th></th></tr>
+  <tr><th style="width:200px">JSON-Pfad</th><th style="width:220px">Spalte</th><th style="width:100px">Faktor</th><th></th></tr>
   {% for id, path, column, scale, note in fields %}
   <tr><td class="mono">{{ path }}</td><td class="mono">{{ column }}</td>
       <td class="mono">{{ scale }}</td>
@@ -19,11 +20,15 @@
 </table>
 {% else %}<p class="dim">Noch nichts zugeordnet.</p>{% endif %}
 
-<h2>Felder aus dem letzten Telegramm</h2>
+<h2>Felder aus dem Telegramm</h2>
 {% if leaves %}
-<p class="note">Empfangen auf <span class="mono">{{ sample_topic }}</span> um {{ sample_at[11:19] }} UTC. Grün hinterlegte Pfade sind bereits zugeordnet.</p>
+<p class="note">
+  {% if sample_source == 'manual' %}Von Hand eingefügtes Telegramm{% else %}Zuletzt empfangen{% endif %}
+  {% if sample_at %}, {{ sample_at.strftime('%d.%m.%Y %H:%M:%S') }}{% endif %}.
+  Grün markierte Pfade sind zugeordnet, ausgegraute Spalten bereits vergeben.
+</p>
 <table>
-  <tr><th style="width:180px">JSON-Pfad</th><th style="width:140px">Wert</th><th>Spalte</th><th style="width:110px">Faktor</th><th style="width:110px"></th></tr>
+  <tr><th style="width:190px">JSON-Pfad</th><th style="width:130px">Wert</th><th>Spalte</th><th style="width:110px">Faktor</th><th style="width:110px"></th></tr>
   {% for path, value in leaves %}
   <tr>
     <td class="mono">{% if path in mapped %}<span class="pill ok">{{ path }}</span>{% else %}{{ path }}{% endif %}</td>
@@ -31,9 +36,11 @@
     <form method="post" action="/mqtt/map/add">
     <input type="hidden" name="topic_id" value="{{ tid }}">
     <input type="hidden" name="json_path" value="{{ path }}">
-    <td><select name="column_name">
-      <option value="">— nicht speichern —</option>
-      {% for col in columns %}<option value="{{ col }}">{{ col }}</option>{% endfor %}
+    <td><select name="column_name" required>
+      <option value="">— Spalte wählen —</option>
+      {% for col in columns %}
+      <option value="{{ col }}" {{ 'disabled' if col in used }}>{{ col }}{{ ' (belegt)' if col in used }}</option>
+      {% endfor %}
     </select></td>
     <td><input name="scale" value="1" class="mono" style="width:90px"></td>
     <td><button class="link">übernehmen</button></td>
@@ -42,6 +49,14 @@
   {% endfor %}
 </table>
 {% else %}
-<p class="dim">Für dieses Topic ist noch kein Telegramm eingetroffen. Sobald eines ankommt, stehen hier alle Pfade mit ihren Werten zur Auswahl.</p>
+<p class="dim">Für dieses Topic ist noch kein Telegramm eingetroffen.</p>
 {% endif %}
+
+<h2>Telegramm von Hand einfügen</h2>
+<p class="note">Damit lässt sich die Zuordnung aufbauen, bevor der Broker verbunden ist. Ein empfangenes Telegramm überschreibt die Vorlage später automatisch.</p>
+<form method="post" action="/mqtt/map/sample">
+  <input type="hidden" name="topic_id" value="{{ tid }}">
+  <textarea name="payload" rows="6" style="width:100%;font-family:ui-monospace,monospace;background:#111318;color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:8px" placeholder='{"Time":"2026-09-08T09:29:44","z":{"Pi":0.0,"Po":0.907}}'></textarea>
+  <p><button class="act">Felder auslesen</button></p>
+</form>
 {% endblock %}
