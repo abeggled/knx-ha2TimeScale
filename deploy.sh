@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 # Copy the whole working tree to the target host, so no file can be forgotten.
 #
-#   ./deploy.sh admdaniel@iqsrv36.a38.ch
-#
 # Uses tar over ssh — no rsync needed on the target. Secrets and local state
 # are excluded; installing into /opt still needs root and stays manual.
 set -euo pipefail
