@@ -21,13 +21,14 @@ import psycopg
 import db
 import ha_source
 import knx_source
+import mqtt_source
 from registry import Registry
 from writer import BatchWriter
 
 log = logging.getLogger("collector")
 
 
-async def status_loop(knx, ha, knx_writer, ha_writer, started: str) -> None:
+async def status_loop(knx, ha, knx_writer, ha_writer, mqtt, started: str) -> None:
     """Log a summary and publish a heartbeat the UI can read."""
     while True:
         await asyncio.sleep(30)
@@ -41,6 +42,11 @@ async def status_loop(knx, ha, knx_writer, ha_writer, started: str) -> None:
             parts.append(
                 f"HA rx={ha.received} skip={ha.skipped} "
                 f"written={ha_writer.written} dropped={ha_writer.dropped}"
+            )
+        if mqtt:
+            parts.append(
+                f"MQTT rx={mqtt.received} mapped={mqtt.mapped} "
+                f"unmatched={mqtt.unmatched}"
             )
         try:
             async with await psycopg.AsyncConnection.connect(
@@ -90,7 +96,8 @@ def _watch(task: asyncio.Task) -> asyncio.Task:
 
 async def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--only", choices=["knx", "ha"], help="run a single source")
+    ap.add_argument("--only", choices=["knx", "ha", "mqtt"],
+                    help="run a single source")
     ap.add_argument("--dry-run", action="store_true",
                     help="write to knx_measurements_dryrun / ha_measurements_dryrun")
     ap.add_argument("--log-level", default="INFO")
@@ -126,8 +133,16 @@ async def main() -> None:
         tasks += [_watch(asyncio.create_task(ha_writer.run(), name="ha-writer")),
                   _watch(asyncio.create_task(ha.run(), name="ha-source"))]
 
+    mqtt = None
+    if args.only in (None, "mqtt") and not args.dry_run:
+        dsn_map = {"knx_data": db.KNX_DSN, "ha_data": db.HA_DSN,
+                   "power_data": db.POWER_DSN}
+        mqtt = mqtt_source.MQTTSource(registry, dsn_map.get)
+        tasks.append(_watch(asyncio.create_task(
+            mqtt.run(db.KNX_DSN), name="mqtt-source")))
+
     tasks.append(_watch(asyncio.create_task(
-        status_loop(knx, ha, knx_writer, ha_writer,
+        status_loop(knx, ha, knx_writer, ha_writer, mqtt,
                     dt.datetime.now(dt.UTC).isoformat()), name="status")))
 
     stop = asyncio.Event()

@@ -7,6 +7,7 @@ import psycopg
 
 KNX_DSN = os.environ.get("KNX_DSN", "dbname=knx_data")
 HA_DSN = os.environ.get("HA_DSN", "dbname=ha_data")
+POWER_DSN = os.environ.get("POWER_DSN", "dbname=power_data")
 
 
 def knx_conn(**kw) -> psycopg.Connection:
@@ -15,6 +16,10 @@ def knx_conn(**kw) -> psycopg.Connection:
 
 def ha_conn(**kw) -> psycopg.Connection:
     return psycopg.connect(HA_DSN, **kw)
+
+
+def power_conn(**kw) -> psycopg.Connection:
+    return psycopg.connect(POWER_DSN, **kw)
 
 
 def normalise_dpt(dpt) -> str | None:

@@ -1,0 +1,47 @@
+{% extends "base.html" %}{% set nav='mqtt' %}
+{% block body %}
+<p><a href="/mqtt" style="color:var(--acc);text-decoration:none">&larr; zurück zu MQTT</a></p>
+<h2 class="mono">{{ topic }}</h2>
+<p class="note">Ziel: <span class="mono">{{ target_db }}.{{ target_table }}</span>. Jedes Feld verbindet einen JSON-Pfad mit einer Spalte. Der Faktor wird vor dem Speichern multipliziert — damit landen Summen in kW und Phasen in W in derselben Einheit, wenn du es so willst.</p>
+
+<h2>Zugeordnete Felder</h2>
+{% if fields %}
+<table>
+  <tr><th>JSON-Pfad</th><th>Spalte</th><th>Faktor</th><th></th></tr>
+  {% for id, path, column, scale, note in fields %}
+  <tr><td class="mono">{{ path }}</td><td class="mono">{{ column }}</td>
+      <td class="mono">{{ scale }}</td>
+      <td><form method="post" action="/mqtt/map/delete" class="inline">
+        <input type="hidden" name="id" value="{{ id }}">
+        <input type="hidden" name="topic_id" value="{{ tid }}">
+        <button class="link">entfernen</button></form></td></tr>
+  {% endfor %}
+</table>
+{% else %}<p class="dim">Noch nichts zugeordnet.</p>{% endif %}
+
+<h2>Felder aus dem letzten Telegramm</h2>
+{% if leaves %}
+<p class="note">Empfangen auf <span class="mono">{{ sample_topic }}</span> um {{ sample_at[11:19] }} UTC. Grün hinterlegte Pfade sind bereits zugeordnet.</p>
+<table>
+  <tr><th style="width:180px">JSON-Pfad</th><th style="width:140px">Wert</th><th>Spalte</th><th style="width:110px">Faktor</th><th style="width:110px"></th></tr>
+  {% for path, value in leaves %}
+  <tr>
+    <td class="mono">{% if path in mapped %}<span class="pill ok">{{ path }}</span>{% else %}{{ path }}{% endif %}</td>
+    <td class="mono dim">{{ value }}</td>
+    <form method="post" action="/mqtt/map/add">
+    <input type="hidden" name="topic_id" value="{{ tid }}">
+    <input type="hidden" name="json_path" value="{{ path }}">
+    <td><select name="column_name">
+      <option value="">— nicht speichern —</option>
+      {% for col in columns %}<option value="{{ col }}">{{ col }}</option>{% endfor %}
+    </select></td>
+    <td><input name="scale" value="1" class="mono" style="width:90px"></td>
+    <td><button class="link">übernehmen</button></td>
+    </form>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="dim">Für dieses Topic ist noch kein Telegramm eingetroffen. Sobald eines ankommt, stehen hier alle Pfade mit ihren Werten zur Auswahl.</p>
+{% endif %}
+{% endblock %}

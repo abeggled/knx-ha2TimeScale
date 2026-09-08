@@ -442,6 +442,171 @@ def exclusion_delete(id: int = Form(...), _: str = Depends(auth)):
     return RedirectResponse("/exclusions", status_code=303)
 
 
+# ── MQTT ──────────────────────────────────────────────────────────────────
+TARGET_DBS = {"knx_data": db.KNX_DSN, "ha_data": db.HA_DSN,
+              "power_data": db.POWER_DSN}
+
+
+def _columns_of(target_db: str, table: str) -> list[str]:
+    dsn = TARGET_DBS.get(target_db)
+    if not dsn:
+        return []
+    return [r[0] for r in query(
+        dsn, "SELECT column_name FROM information_schema.columns"
+             " WHERE table_schema='public' AND table_name=%s"
+             "   AND column_name <> 'time' ORDER BY ordinal_position", (table,))]
+
+
+def _samples() -> dict:
+    import mqtt_source
+    try:
+        return json.loads(mqtt_source.SAMPLE_FILE.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def _flatten(payload, prefix="") -> list[tuple[str, object]]:
+    """Every leaf of the payload as a dotted path — the list the mapping is
+    built from, so nobody has to type paths by hand."""
+    out = []
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            out += _flatten(value, f"{prefix}{key}.")
+    else:
+        out.append((prefix.rstrip("."), payload))
+    return out
+
+
+@app.get("/mqtt", response_class=HTMLResponse)
+def mqtt_view(request: Request, saved: str = "", _: str = Depends(auth)):
+    cfg = dict(query(db.KNX_DSN,
+                     "SELECT key, value FROM settings WHERE key LIKE %s"
+                     " ORDER BY key", ("mqtt.%",)))
+    topics = query(db.KNX_DSN,
+                   "SELECT id, topic, target_db, target_table, time_path,"
+                   " time_is_local, enabled, note, last_seen, last_error"
+                   " FROM mqtt_topic ORDER BY id")
+    fields = {}
+    for t in topics:
+        fields[t[0]] = query(db.KNX_DSN,
+                             "SELECT id, json_path, column_name, scale, note"
+                             " FROM mqtt_field WHERE topic_id=%s"
+                             " ORDER BY column_name", (t[0],))
+    import mqtt_source
+    return page(request, "mqtt.html", cfg=cfg, topics=topics, fields=fields,
+                samples=_samples(), saved=saved,
+                password_stored=mqtt_source.PASSWORD_FILE.exists(),
+                target_dbs=sorted(TARGET_DBS))
+
+
+@app.post("/mqtt/broker")
+def mqtt_broker(request: Request, enabled: str = Form(""),
+                host: str = Form(""), port: str = Form("1883"),
+                tls: str = Form(""), tls_insecure: str = Form(""),
+                ca_cert: str = Form(""), username: str = Form(""),
+                client_id: str = Form("homearchive"), qos: str = Form("0"),
+                password: str = Form(""), _: str = Depends(auth)):
+    for key, value in [("mqtt.enabled", "true" if enabled else "false"),
+                       ("mqtt.host", host.strip()),
+                       ("mqtt.port", port.strip() or "1883"),
+                       ("mqtt.tls", "true" if tls else "false"),
+                       ("mqtt.tls_insecure", "true" if tls_insecure else "false"),
+                       ("mqtt.ca_cert", ca_cert.strip()),
+                       ("mqtt.username", username.strip()),
+                       ("mqtt.client_id", client_id.strip() or "homearchive"),
+                       ("mqtt.qos", qos.strip() or "0")]:
+        execute(db.KNX_DSN,
+                "UPDATE settings SET value=%s, updated_at=now() WHERE key=%s",
+                (value, key))
+    if password:
+        import mqtt_source
+        mqtt_source.STATE_DIR.mkdir(parents=True, exist_ok=True)
+        mqtt_source.PASSWORD_FILE.write_text(password)
+        mqtt_source.PASSWORD_FILE.chmod(0o600)
+    return RedirectResponse("/mqtt?saved=broker", status_code=303)
+
+
+@app.post("/mqtt/topic")
+def mqtt_topic_add(topic: str = Form(...), target_db: str = Form(...),
+                   target_table: str = Form(...), time_path: str = Form(""),
+                   note: str = Form(""), _: str = Depends(auth)):
+    if target_db not in TARGET_DBS:
+        raise HTTPException(400, "unknown target database")
+    execute(db.KNX_DSN,
+            "INSERT INTO mqtt_topic (topic, target_db, target_table,"
+            " time_path, note) VALUES (%s,%s,%s,%s,%s)"
+            " ON CONFLICT (topic) DO UPDATE SET target_db=excluded.target_db,"
+            " target_table=excluded.target_table, time_path=excluded.time_path,"
+            " note=excluded.note",
+            (topic.strip(), target_db, target_table.strip(),
+             time_path.strip() or None, note or None))
+    return RedirectResponse("/mqtt?saved=topic", status_code=303)
+
+
+@app.post("/mqtt/topic/delete")
+def mqtt_topic_delete(id: int = Form(...), _: str = Depends(auth)):
+    execute(db.KNX_DSN, "DELETE FROM mqtt_topic WHERE id=%s", (id,))
+    return RedirectResponse("/mqtt", status_code=303)
+
+
+@app.post("/mqtt/topic/toggle")
+def mqtt_topic_toggle(id: int = Form(...), _: str = Depends(auth)):
+    execute(db.KNX_DSN,
+            "UPDATE mqtt_topic SET enabled = NOT enabled WHERE id=%s", (id,))
+    return RedirectResponse("/mqtt", status_code=303)
+
+
+@app.get("/mqtt/map", response_class=HTMLResponse)
+def mqtt_map(request: Request, topic_id: int, _: str = Depends(auth)):
+    rows = query(db.KNX_DSN,
+                 "SELECT id, topic, target_db, target_table FROM mqtt_topic"
+                 " WHERE id=%s", (topic_id,))
+    if not rows:
+        raise HTTPException(404, "unknown topic")
+    tid, topic, tdb, table = rows[0]
+    fields = query(db.KNX_DSN,
+                   "SELECT id, json_path, column_name, scale, note"
+                   " FROM mqtt_field WHERE topic_id=%s ORDER BY column_name",
+                   (tid,))
+    mapped = {f[1] for f in fields}
+    sample, sample_topic = None, None
+    import mqtt_source
+    for name, entry in _samples().items():
+        if mqtt_source.topic_matches(topic, name):
+            sample, sample_topic = entry, name
+            break
+    leaves = _flatten(sample["payload"]) if sample else []
+    return page(request, "mqtt_map.html", tid=tid, topic=topic, target_db=tdb,
+                target_table=table, fields=fields, mapped=mapped,
+                leaves=leaves, sample_topic=sample_topic,
+                sample_at=sample["at"] if sample else None,
+                columns=_columns_of(tdb, table))
+
+
+@app.post("/mqtt/map/add")
+def mqtt_map_add(topic_id: int = Form(...), json_path: str = Form(...),
+                 column_name: str = Form(...), scale: str = Form("1"),
+                 _: str = Depends(auth)):
+    try:
+        factor = float(scale)
+    except ValueError:
+        factor = 1.0
+    execute(db.KNX_DSN,
+            "INSERT INTO mqtt_field (topic_id, json_path, column_name, scale)"
+            " VALUES (%s,%s,%s,%s)"
+            " ON CONFLICT (topic_id, column_name) DO UPDATE"
+            " SET json_path=excluded.json_path, scale=excluded.scale",
+            (topic_id, json_path.strip(), column_name.strip(), factor))
+    return RedirectResponse(f"/mqtt/map?topic_id={topic_id}", status_code=303)
+
+
+@app.post("/mqtt/map/delete")
+def mqtt_map_delete(id: int = Form(...), topic_id: int = Form(...),
+                    _: str = Depends(auth)):
+    execute(db.KNX_DSN, "DELETE FROM mqtt_field WHERE id=%s", (id,))
+    return RedirectResponse(f"/mqtt/map?topic_id={topic_id}", status_code=303)
+
+
 # ── settings ──────────────────────────────────────────────────────────────
 @app.get("/settings", response_class=HTMLResponse)
 def settings_view(request: Request, _: str = Depends(auth)):
